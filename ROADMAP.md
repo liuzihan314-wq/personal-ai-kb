@@ -1,0 +1,636 @@
+# Personal AI Knowledge Base — ROADMAP.md
+
+> Version: v0.1  
+> Owner: MAIN Coordinator only  
+> Rule: Worker Agents may read this file but must not edit task status, dependencies, ownership or milestones.
+
+## 1. 目标
+
+把 PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md 转为可执行任务。
+
+原则：
+
+- 小步开发
+- 明确依赖
+- 能并行的任务由不同 Worker 并行
+- 同一 Codex Project 下开独立 Task thread
+- 并行改代码时使用独立 branch + worktree
+- Worker 完成后回报 MAIN
+- MAIN 验收通过后才进入合并 / 下一任务
+- 不通过则返回原 Worker 修复
+- `main` 保持稳定
+
+---
+
+## 2. 状态定义
+
+- `BLOCKED`：依赖未满足
+- `READY`：可以分配
+- `IN_PROGRESS`：Worker 正在执行
+- `REVIEW`：等待 MAIN 验收
+- `DONE`：验收通过并完成合并
+- `POC_REQUIRED`：先验证可行性，不能假定成立
+
+---
+
+## 3. Milestone 总览
+
+```mermaid
+flowchart TD
+    M0[M0 Project Foundation]
+    M1[M1 Input Foundation]
+    M2[M2 AI Notes]
+    M3[M3 Retrieval & Knowledge]
+    M4[M4 Content Creation]
+    M5[M5 WeChat macOS POC]
+    M6[M6 Web UI]
+    M7[M7 Cross-platform Hardening]
+
+    M0 --> M1
+    M1 --> M2
+    M2 --> M3
+    M3 --> M4
+    M1 --> M5
+    M4 --> M6
+    M5 --> M6
+    M6 --> M7
+```
+
+---
+
+# M0 — Project Foundation
+
+## TASK-000 — Read Design Docs and Restate
+
+Status: DONE  
+Dependencies: none  
+Owner: MAIN
+
+Acceptance record: 2026-09-06 用户确认项目理解并授权开始执行；此任务仅阅读复述，无实现代码需要合并。
+
+Codex must first read:
+
+- PRODUCT.md
+- ARCHITECTURE.md
+- TECH_STACK.md
+- ROADMAP.md
+- CODEX_HANDOFF.md
+
+Output:
+
+- 用自己的话复述产品目标
+- V1 输入 / 输出
+- V1 不做什么
+- Raw / Notes / Knowledge / Index 区别
+- macOS / Windows 边界
+- 当前最大风险
+- 不写代码
+
+Acceptance:
+
+- 用户确认 Codex 理解正确
+
+---
+
+## TASK-001 — Git + Repository Foundation
+
+Status: IN_PROGRESS  
+Dependencies: TASK-000
+
+Owner: MAIN（Git / GitHub / 验收）+ TASK-001 Worker（README / 忽略规则 / 无密钥模板）
+
+Progress: 2026-09-06 本地 main 已初始化，基础文件子范围经 MAIN 复核 PASS；尚无 commit / remote / push。等待 GitHub 登录、提交身份及具体首次提交批准，TASK-001 尚未完整验收，TASK-002 保持 BLOCKED。
+
+Scope:
+
+- 初始化本地 Git repo（如果尚未初始化）
+- 准备 `.gitignore`
+- 准备 `.env.example`
+- 准备基础 README
+- 如果 GitHub 私有仓库尚不存在，协助用户创建 `Private Repository`
+- 绑定 remote
+- 首次 push 前确保私人数据未进入 Git
+
+Acceptance:
+
+- `git status` 清晰
+- GitHub repo 为 Private
+- 设计文档与基础工程文件可在 GitHub 看到
+- `.env` / 私人知识数据没有上传
+- 用户理解 `status / diff / commit / push` 的基本作用
+
+---
+
+## TASK-002 — Python Project Skeleton
+
+Status: BLOCKED  
+Dependencies: TASK-001
+
+Branch:
+
+`feat/project-foundation`
+
+Scope:
+
+- `pyproject.toml`
+- uv environment
+- `src/pkb/`
+- `tests/`
+- `data/` 空目录约定
+- 基础 config
+- 基础 logging
+- CLI hello / health check
+
+Acceptance:
+
+- macOS 可安装依赖
+- `pytest` 可运行
+- CLI health command 可运行
+- Core 不依赖 macOS 专属 API
+- Windows 路径处理使用跨平台方式（如 pathlib）
+
+---
+
+# M1 — Input Foundation
+
+TASK-003 与 TASK-004 在 TASK-002 后可并行。
+
+```mermaid
+flowchart LR
+    T2[TASK-002 Foundation]
+    T3[TASK-003 PDF]
+    T4[TASK-004 Idea Card]
+    T2 --> T3
+    T2 --> T4
+```
+
+## TASK-003 — PDF Import
+
+Status: BLOCKED  
+Dependencies: TASK-002  
+Suggested branch: `feat/pdf-ingest`
+
+Scope:
+
+- 文本 PDF 导入
+- PyMuPDF 文本提取
+- UnifiedDocument
+- Raw 保存
+- metadata
+- 去重基础
+
+Not in scope:
+
+- OCR
+- 扫描 PDF
+
+Acceptance:
+
+- 文本 PDF 可导入
+- 原 PDF 保留
+- 提取文本可读
+- 重复导入不会产生重复记录
+- 扫描 PDF 给出明确“不支持”提示而不是 OCR
+
+---
+
+## TASK-004 — Idea / Quote Card
+
+Status: BLOCKED  
+Dependencies: TASK-002  
+Suggested branch: `feat/idea-card`
+
+Scope:
+
+- 手动观点
+- 好句
+- 灵感
+- 用户判断
+
+Acceptance:
+
+- 可创建卡片
+- 可保存 optional source / tags / note
+- 进入统一 Document / Raw 结构
+- 可被后续 Retrieval 使用
+
+---
+
+# M2 — AI Notes
+
+## TASK-005 — AI Provider Interface
+
+Status: BLOCKED  
+Dependencies: TASK-002  
+Suggested branch: `feat/ai-provider`
+
+Scope:
+
+定义可插拔 Provider interface。
+
+不把模型名 / API Key 写死。
+
+Acceptance:
+
+- mock provider 可用于测试
+- provider config 可从环境读取
+- Core 不依赖特定厂商 SDK
+
+---
+
+## TASK-006 — Single-document AI Notes
+
+Status: BLOCKED  
+Dependencies: TASK-003, TASK-004, TASK-005  
+Suggested branch: `feat/ai-notes`
+
+Scope:
+
+- summary
+- key points
+- quotes
+- tags
+- source references
+- Markdown + frontmatter
+
+Acceptance:
+
+- 5 篇测试资料均可产生合法 Note
+- Note 不覆盖 Raw
+- Note 可以定位回 source
+- 观点卡片不被强制套用不合理的长文摘要模板
+
+---
+
+# M3 — Retrieval & Knowledge
+
+TASK-007 与 TASK-008 部分可在共同基础完成后拆 Worker，但 MAIN 应控制文件边界。
+
+## TASK-007 — Index + Related
+
+Status: BLOCKED  
+Dependencies: TASK-006  
+Suggested branch: `feat/index-related`
+
+Scope:
+
+- JSON index
+- title / tags / keywords / topic
+- related rule scoring
+- 双向 related
+- 可解释日志
+
+Acceptance:
+
+- 新 Note 可进入 Index
+- 相关文档能建立关联
+- 关联理由可解释
+- Index 可重建
+- 不依赖向量库
+
+---
+
+## TASK-008 — Retrieval Service
+
+Status: BLOCKED  
+Dependencies: TASK-007  
+Suggested branch: `feat/retrieval`
+
+Scope:
+
+- title
+- tags
+- keywords
+- topic
+- related
+- candidate ranking
+- AI candidate judgment interface
+
+Acceptance:
+
+- 对测试问题可以找到合理候选
+- 返回来源路径
+- 没命中时明确告诉调用方
+- 不静默调用向量数据库
+
+---
+
+## TASK-009 — Knowledge Compiler
+
+Status: BLOCKED  
+Dependencies: TASK-006, TASK-007  
+Suggested branch: `feat/knowledge-compiler`
+
+Scope:
+
+- 多 Note → Topic Knowledge
+- source trace
+- 更新已有 Topic
+- 不修改 Raw
+
+Acceptance:
+
+- 5 篇相关资料可编译成一个主题页
+- Knowledge 能追踪到 Notes
+- Notes 能追踪到 Raw
+- 新资料加入后可更新主题页
+
+---
+
+# M4 — Content Creation
+
+## TASK-010 — Q&A / Topic Synthesis
+
+Status: BLOCKED  
+Dependencies: TASK-008, TASK-009  
+Suggested branch: `feat/qa`
+
+Acceptance:
+
+- “AI 视频有哪些思路？”类问题可基于库内知识回答
+- 结果能给出对应来源
+- Knowledge 不足时可沿 Notes / Raw 补充
+
+---
+
+## TASK-011 — Topic Generator
+
+Status: BLOCKED  
+Dependencies: TASK-008, TASK-009  
+Suggested branch: `feat/topic-generator`
+
+Scope:
+
+- 全库候选
+- 近期资料适当加权
+- 观点卡片参与
+- 输出 3～5 个候选
+
+Acceptance:
+
+- 不只是重写最近标题
+- 每个选题说明为什么值得做
+- 每个选题可回溯到支持它的知识 / Notes
+
+---
+
+## TASK-012 — Script Writer
+
+Status: BLOCKED  
+Dependencies: TASK-011, TASK-008  
+Suggested branch: `feat/script-writer`
+
+Flow:
+
+选题  
+→ 用户选择  
+→ Retrieval  
+→ 证据上下文  
+→ 2～3 分钟口播
+
+Acceptance:
+
+- 未经“用户选题”不自动继续
+- 生成前重新检索证据
+- 口播可追溯到使用的知识来源
+- 内容自然、具体、避免纯鸡汤
+
+---
+
+# M5 — WeChat macOS POC
+
+## TASK-013 — macOS WeChat Favorites Feasibility POC
+
+Status: POC_REQUIRED  
+Dependencies: TASK-002  
+Suggested branch: `poc/wechat-macos`
+
+Important:
+
+这是 POC，不得一开始假定技术路线稳定。
+
+Scope:
+
+- macOS 微信收藏本地数据可行性
+- 新增项识别
+- 微信公众号文章白名单
+- 文章 metadata / 正文
+- 去重
+- 视频 / 普通 URL 过滤
+
+Acceptance:
+
+1. 收藏一篇公众号文章后可检测
+2. 可确认属于公众号文章
+3. 可得到足够的标题 / 正文 / 来源
+4. 第二次同步不重复
+5. 收藏视频不会进入
+6. 普通 URL 不会进入
+7. 微信重启后仍可再次执行
+8. 把版本 / 加密 / 数据路径等不确定性记录下来
+
+Failure rule:
+
+若 POC 不稳定：
+
+- 不阻塞 PDF / Idea / Notes / Retrieval / Topics / Script
+- 保留手动公众号导入兜底
+- MAIN 决定是否延期、换实现或降级
+
+---
+
+## TASK-014 — WeChat Adapter Productionization
+
+Status: BLOCKED  
+Dependencies: TASK-013 PASS, TASK-003/004 input foundation stable  
+Suggested branch: `feat/wechat-macos`
+
+Acceptance:
+
+- 接入 UnifiedDocument
+- 自动去重
+- 白名单稳定
+- 可由 CLI 调用
+- 失败有日志
+- 不影响 Core
+
+---
+
+## TASK-015 — macOS Scheduler
+
+Status: BLOCKED  
+Dependencies: TASK-014  
+Suggested branch: `feat/macos-scheduler`
+
+Scope:
+
+- launchd
+- 每日运行 sync command
+- 日志
+- 手动触发
+
+Acceptance:
+
+- 可重复执行
+- 机器重启后配置仍有效
+- 失败不会破坏已有知识
+
+---
+
+# M6 — Web UI
+
+## TASK-016 — Streamlit MVP
+
+Status: BLOCKED  
+Dependencies: TASK-010, TASK-011, TASK-012  
+Suggested branch: `feat/web-ui`
+
+UI 最少包含：
+
+- PDF import
+- Idea card
+- Search / Q&A
+- Topic synthesis
+- Generate topics
+- Select topic
+- Generate script
+
+Acceptance:
+
+- 主要日常流程不需要 CLI
+- UI 只调用 Core，不复制业务逻辑
+
+---
+
+# M7 — Cross-platform Hardening
+
+## TASK-017 — Windows Core Smoke Test
+
+Status: BLOCKED  
+Dependencies: M4 core loop stable  
+Suggested branch: `chore/windows-compat`
+
+Scope:
+
+只验证核心代码：
+
+- install
+- PDF
+- Idea Card
+- Notes
+- Index
+- Retrieval
+- Topics / Script
+- paths / encoding
+
+Not required:
+
+- Windows WeChat sync
+
+Acceptance:
+
+- Core 在 Windows 可运行
+- 平台差异没有渗进 Core
+
+---
+
+## TASK-018 — Windows Scheduler Adapter
+
+Status: BACKLOG  
+Dependencies: TASK-017
+
+使用 Windows Task Scheduler 适配定时任务。
+
+---
+
+## TASK-019 — Windows WeChat Adapter
+
+Status: BACKLOG  
+Dependencies: TASK-017
+
+未来独立实现。
+
+不得为它维护一套长期 Windows branch。
+
+---
+
+# 4. 推荐首轮并行策略
+
+TASK-002 完成后：
+
+可以并行：
+
+- Worker A → TASK-003 PDF
+- Worker B → TASK-004 Idea Card
+- Worker C → TASK-005 AI Provider
+- Worker D → TASK-013 WeChat macOS POC（独立风险探索）
+
+主链不要等待 WeChat POC 才继续。
+
+---
+
+# 5. Worker Completion Contract
+
+每个 Worker 完成时必须回报：
+
+```text
+TASK:
+STATUS: PASS / BLOCKED
+
+完成：
+- ...
+
+修改文件：
+- ...
+
+测试：
+- ...
+- X passed / X failed
+
+未解决：
+- ...
+
+Branch:
+Worktree:
+
+Commit:
+（如尚未获准 commit，写 NOT COMMITTED）
+
+验收步骤：
+1.
+2.
+3.
+
+风险 / 说明：
+- ...
+```
+
+MAIN 不接受“已完成”作为唯一验收证据。
+
+---
+
+# 6. MAIN 验收规则
+
+MAIN 需要检查：
+
+- Task 是否只做约定 scope
+- Diff 是否合理
+- Tests 是否通过
+- Acceptance 是否全部满足
+- 是否引入无关重构
+- 是否破坏跨平台要求
+- 是否碰了 Raw immutable 原则
+
+PASS：
+
+- 才允许进入 merge / DONE
+- 更新 ROADMAP
+- 解锁下一依赖任务
+
+FAIL：
+
+- 返回原 Worker
+- 保持原 worktree
+- 只修失败项
+- 增加对应 regression test
+- 再次提交 REVIEW

@@ -1,0 +1,41 @@
+# Python caches, build outputs, and test tooling
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+.pytest_cache/
+
+# Local Python environment
+.venv/
+.uv/
+
+# Secrets and local environment variants
+.env
+.env.*
+!.env.example
+
+# Local knowledge, runtime state, and generated deliverables
+data/
+runtime/
+output/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local Git worktrees
+.worktree/
+.worktrees/
+worktree/
+worktrees/
+*.worktree/
