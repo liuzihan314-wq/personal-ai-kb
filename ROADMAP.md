@@ -168,9 +168,11 @@ flowchart LR
 
 ## TASK-003 — PDF Import
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-002  
 Suggested branch: `feat/pdf-ingest`
+
+Acceptance record: 2026-09-07 MAIN verified allowed scope, immutable Raw storage, deduplication, text-PDF import, scan rejection without OCR, `uv lock --check`, sdist/wheel build, `pytest` (11 passed), and CLI health/hello. PyMuPDF emits five upstream SWIG deprecation warnings under pytest; ordinary V1 test execution passes, while warnings-as-errors is not currently supported by that dependency.
 
 Scope:
 
@@ -198,7 +200,7 @@ Acceptance:
 
 ## TASK-004 — Idea / Quote Card
 
-Status: BLOCKED
+Status: READY
 Dependencies: TASK-002, TASK-003（UnifiedDocument / Raw interface）
 Suggested branch: `feat/idea-card`
 
@@ -222,9 +224,11 @@ Acceptance:
 
 ## TASK-005 — AI Provider Interface
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-002  
 Suggested branch: `feat/ai-provider`
+
+Acceptance record: 2026-09-07 MAIN verified vendor-neutral interface, network-free mock provider, environment-loaded and masked secret configuration, `pytest` (9 passed), and CLI health/hello. Integrated to local main in `fbdd403`.
 
 Scope:
 
@@ -403,9 +407,11 @@ Acceptance:
 
 ## TASK-013 — macOS WeChat Favorites Feasibility POC
 
-Status: IN_PROGRESS
+Status: POC_REQUIRED
 Dependencies: TASK-002  
 Suggested branch: `poc/wechat-macos`
+
+Progress: synthetic metadata classification and filtering tests pass (6 passed), including video, video-account and ordinary-URL rejection. The actual POC acceptance remains unverified: no official export/sync capability evidence and no safe real-client observation has established incremental discovery, account classification, metadata/content availability, duplicate behavior, or restart behavior. Do not merge this partial branch as a completed POC.
 
 Important:
 

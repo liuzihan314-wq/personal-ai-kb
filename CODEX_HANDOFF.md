@@ -465,6 +465,7 @@ MAIN 收到 Completion Report 后必须自行检查 Task Brief、Acceptance Crit
 - PASS：直接完成正常的短期 branch 提交、fast-forward merge、ROADMAP 更新和依赖解锁，并继续派发已满足依赖且范围不冲突的任务。
 - FAIL：向原来的同一个 Task Thread 发送明确的返工要求；Worker 留在原 branch / worktree，只修复失败项，随后由 MAIN 再验收。
 - 不得把正常验收、返工、提交、合并或后续派发拆成逐步向用户申请批准的流程。
+- MAIN 为每个 Active Task 记录 thread/clientThreadId、branch 与 worktree。Completion Report 未到达或平台只返回 clientThreadId 时，MAIN 仍须定期检查该 worktree 的分支、git status、最新 commit 与可见 Task 状态；发现实现变化即执行同一套验收流程。缺少可见正式线程要如实报告为平台限制，但不能阻塞对已有工作树结果的验收与后续调度。
 
 只有以下情况 MAIN 才暂停请求用户决定：关键需求或架构歧义、明显超出既定范围、高风险或不可逆操作、新增外部账号/权限/付费、数据迁移、连续失败须改变技术路线，或多个重要业务方案需要用户拍板。
 
