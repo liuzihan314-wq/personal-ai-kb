@@ -304,7 +304,7 @@ Acceptance:
 
 ## TASK-008 — Retrieval Service
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-007  
 Suggested branch: `feat/retrieval`
 
@@ -329,7 +329,7 @@ Acceptance:
 
 ## TASK-009 — Knowledge Compiler
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-006, TASK-007  
 Suggested branch: `feat/knowledge-compiler`
 
