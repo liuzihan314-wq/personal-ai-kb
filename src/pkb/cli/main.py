@@ -1,5 +1,6 @@
 """Command-line entry points for the project foundation."""
 
+import json
 import logging
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from pkb.ingest.pdf import PDFImportError, PDFImporter
 from pkb.index import IndexBuildError, IndexService, IndexStorageError, read_index
 from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
+from pkb.retrieval import RetrievalService
 from pkb.storage import RawStorage
 
 
@@ -212,6 +214,66 @@ def index_status(
     typer.echo(f"notes: {len(index.entries)}")
     typer.echo(f"related: {index.related_count}")
     typer.echo(f"index: {target_index_path}")
+
+
+@app.command("search")
+def search(
+    query: str = typer.Argument(..., help="要检索的问题或关键词。"),
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the configured JSON index path.",
+    ),
+    limit: int = typer.Option(10, "--limit", min=1, help="最多返回的候选数量。"),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="以 JSON 输出完整的可追溯候选结果。",
+    ),
+) -> None:
+    """Search the local JSON Index with deterministic explainable scoring."""
+
+    settings = _load_settings()
+    target_index_path = index_path or settings.index_dir / "index.json"
+    try:
+        result = RetrievalService(target_index_path).search(query, limit=limit)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter(
+            f"JSON index does not exist: {target_index_path}",
+            param_hint="index_path",
+        ) from exc
+    except IndexStorageError as exc:
+        raise typer.BadParameter(str(exc), param_hint="index_path") from exc
+
+    if as_json:
+        typer.echo(
+            json.dumps(
+                result.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+        )
+        return
+
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"query: {result.query}")
+    typer.echo(f"candidates: {len(result.candidates)}")
+    for candidate in result.candidates:
+        typer.echo(f"- document_id: {candidate.document_id}")
+        typer.echo(f"  raw_document_id: {candidate.raw_document_id}")
+        typer.echo(f"  title: {candidate.title}")
+        typer.echo(f"  score: {candidate.score:.4f}")
+        typer.echo(f"  note: {candidate.note_path}")
+        for field in candidate.evidence.matched_fields:
+            values = ", ".join(getattr(candidate.evidence, field))
+            typer.echo(f"  evidence_{field}: {values}")
+        for reason in candidate.reasons:
+            typer.echo(f"  reason_{reason.field}: {reason.explanation}")
+
+
+# ``retrieve`` is a CLI spelling kept for callers that use the service name.
+app.command("retrieve")(search)
 
 
 def main() -> None:
