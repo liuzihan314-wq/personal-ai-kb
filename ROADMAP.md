@@ -168,7 +168,7 @@ flowchart LR
 
 ## TASK-003 — PDF Import
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-002  
 Suggested branch: `feat/pdf-ingest`
 
@@ -198,8 +198,8 @@ Acceptance:
 
 ## TASK-004 — Idea / Quote Card
 
-Status: READY
-Dependencies: TASK-002  
+Status: BLOCKED
+Dependencies: TASK-002, TASK-003（UnifiedDocument / Raw interface）
 Suggested branch: `feat/idea-card`
 
 Scope:
@@ -222,7 +222,7 @@ Acceptance:
 
 ## TASK-005 — AI Provider Interface
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-002  
 Suggested branch: `feat/ai-provider`
 
@@ -403,7 +403,7 @@ Acceptance:
 
 ## TASK-013 — macOS WeChat Favorites Feasibility POC
 
-Status: POC_REQUIRED  
+Status: IN_PROGRESS
 Dependencies: TASK-002  
 Suggested branch: `poc/wechat-macos`
 
