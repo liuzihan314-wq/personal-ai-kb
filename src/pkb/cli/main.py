@@ -12,6 +12,7 @@ from pkb.ingest.pdf import PDFImportError, PDFImporter
 from pkb.index import IndexBuildError, IndexService, IndexStorageError, read_index
 from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
+from pkb.qa import QAError, QAService
 from pkb.retrieval import RetrievalService
 from pkb.storage import RawStorage
 
@@ -274,6 +275,83 @@ def search(
 
 # ``retrieve`` is a CLI spelling kept for callers that use the service name.
 app.command("retrieve")(search)
+
+
+@app.command("ask")
+def ask(
+    question: str = typer.Argument(..., help="要回答的问题。"),
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the configured JSON index path.",
+    ),
+    knowledge_dir: Path | None = typer.Option(
+        None,
+        "--knowledge-dir",
+        help="Override the configured Topic Knowledge directory.",
+    ),
+    notes_dir: Path | None = typer.Option(
+        None,
+        "--notes-dir",
+        help="Override the configured Markdown Notes directory.",
+    ),
+    raw_dir: Path | None = typer.Option(
+        None,
+        "--raw-dir",
+        help="Override the configured immutable Raw directory.",
+    ),
+    limit: int = typer.Option(10, "--limit", min=1, help="最多使用的检索候选数量。"),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="以 JSON 输出回答、证据和来源链。",
+    ),
+) -> None:
+    """Answer a question using local Knowledge, Notes, and Raw evidence."""
+
+    settings = _load_settings()
+    service = QAService(
+        index_path=index_path or settings.index_dir / "index.json",
+        knowledge_dir=knowledge_dir or settings.knowledge_dir,
+        notes_dir=notes_dir or settings.notes_dir,
+        raw_dir=raw_dir or settings.raw_dir,
+    )
+    try:
+        result = service.answer(question, limit=limit)
+    except QAError as exc:
+        raise typer.BadParameter(str(exc), param_hint="question") from exc
+
+    if as_json:
+        typer.echo(
+            json.dumps(
+                result.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+        )
+        return
+
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"question: {result.question}")
+    typer.echo(f"evidence_level: {result.evidence_level}")
+    if result.answer is not None:
+        typer.echo(f"answer: {result.answer}")
+    else:
+        typer.echo(f"reason: {result.reason}")
+    typer.echo(f"sources: {len(result.sources)}")
+    for source in result.sources:
+        location = source.path or source.reference or source.source_id
+        availability = "available" if source.available else "unavailable"
+        typer.echo(
+            f"- {source.kind}: {source.source_id} ({availability}) {location}"
+        )
+    for item in result.evidence:
+        typer.echo(f"evidence_{item.source_kind}: {item.explanation}")
+
+
+app.command("qa")(ask)
+app.command("answer")(ask)
 
 
 def main() -> None:
