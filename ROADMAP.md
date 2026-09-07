@@ -29,7 +29,7 @@
 - `IN_PROGRESS`：Worker 正在执行
 - `REVIEW`：等待 MAIN 验收
 - `DONE`：验收通过并完成合并
-- `POC_REQUIRED`：先验证可行性，不能假定成立
+- `POC_REQUIRED`：依赖满足后可作为独立可行性任务派发；只能验证，不能假定方案已成立
 
 ---
 
@@ -62,7 +62,7 @@ flowchart TD
 
 ## TASK-000 — Read Design Docs and Restate
 
-Status: DONE  
+Status: DONE
 Dependencies: none  
 Owner: MAIN
 
@@ -99,7 +99,7 @@ Dependencies: TASK-000
 
 Owner: MAIN（Git / GitHub / 验收）+ TASK-001 Worker（README / 忽略规则 / 无密钥模板）
 
-Progress: 2026-09-07 本地 main 已初始化，基础文件子范围经 MAIN 复核 PASS；首次提交 27fd0b1 已推送至已核验的 GitHub Private Repository，远端 main 与本地一致。TASK-001 完整验收通过；TASK-002 现为 READY。
+Progress: 2026-09-07 本地 main 已初始化，基础文件子范围经 MAIN 复核 PASS；首次提交 27fd0b1 已推送至已核验的 GitHub Private Repository，远端 main 与本地一致。TASK-001 完整验收通过。
 
 Scope:
 
@@ -123,12 +123,14 @@ Acceptance:
 
 ## TASK-002 — Python Project Skeleton
 
-Status: BLOCKED  
+Status: DONE
 Dependencies: TASK-001
 
 Branch:
 
 `feat/project-foundation`
+
+Acceptance record: 2026-09-07 MAIN verified the allowed diff, `uv sync`, sdist/wheel build, `pytest` (7 passed), `pkb health`, `pkb hello`, warning-free CLI execution, cross-platform `pathlib` use, and absence of macOS-only APIs, OCR, vector databases, credentials, and `/Users` hardcodes. Integrated to local `main` as `0d4e040`.
 
 Scope:
 
@@ -166,7 +168,7 @@ flowchart LR
 
 ## TASK-003 — PDF Import
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-002  
 Suggested branch: `feat/pdf-ingest`
 
@@ -196,7 +198,7 @@ Acceptance:
 
 ## TASK-004 — Idea / Quote Card
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-002  
 Suggested branch: `feat/idea-card`
 
@@ -220,7 +222,7 @@ Acceptance:
 
 ## TASK-005 — AI Provider Interface
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-002  
 Suggested branch: `feat/ai-provider`
 

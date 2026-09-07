@@ -458,28 +458,17 @@ PASS?
 
 ---
 
-# 19. User Is the Final Approver
+# 19. MAIN Autonomous Review and Integration
 
-MAIN 可以提出：
+MAIN 收到 Completion Report 后必须自行检查 Task Brief、Acceptance Criteria、修改范围、git diff、测试结果、产品/架构/技术栈约束与禁止项。
 
-- PASS
-- FAIL
-- merge recommendation
-- next task recommendation
+- PASS：直接完成正常的短期 branch 提交、fast-forward merge、ROADMAP 更新和依赖解锁，并继续派发已满足依赖且范围不冲突的任务。
+- FAIL：向原来的同一个 Task Thread 发送明确的返工要求；Worker 留在原 branch / worktree，只修复失败项，随后由 MAIN 再验收。
+- 不得把正常验收、返工、提交、合并或后续派发拆成逐步向用户申请批准的流程。
 
-但用户是最终验收者。
+只有以下情况 MAIN 才暂停请求用户决定：关键需求或架构歧义、明显超出既定范围、高风险或不可逆操作、新增外部账号/权限/付费、数据迁移、连续失败须改变技术路线，或多个重要业务方案需要用户拍板。
 
-尤其在：
-
-- 产品范围变化
-- 架构变化
-- 新依赖
-- 数据迁移
-- Git merge / history change
-- 微信高风险方案
-- 引入数据库 / 向量库
-
-等事项上必须先对齐。
+`reset`、`rebase`、`force push`、删除分支、改写 Git 历史、公开发布以及敏感配置仍须用户明确确认。WeChat POC 必须保持在既定只读、最小数据范围内；一旦需要超出该范围的方案，交由 MAIN 决定是否请求用户。
 
 ---
 
