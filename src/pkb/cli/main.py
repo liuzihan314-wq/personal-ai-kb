@@ -6,6 +6,7 @@ from pathlib import Path
 import typer
 
 from pkb.config import Settings, get_settings
+from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
 from pkb.logging_config import configure_logging
 
@@ -73,6 +74,54 @@ def import_pdf(
     typer.echo(f"raw_pdf: {document.original_file}")
     typer.echo(f"raw_text: {document.metadata['extracted_text_file']}")
     typer.echo(f"metadata: {document.metadata['metadata_file']}")
+
+
+@app.command("add-idea")
+def add_idea(
+    content: str = typer.Argument(..., help="原始观点、好句或灵感正文。"),
+    source_url: str | None = typer.Option(
+        None,
+        "--source-url",
+        "--source",
+        help="可选的来源 URL。",
+    ),
+    tags: list[str] = typer.Option(
+        [],
+        "--tag",
+        "--tags",
+        "-t",
+        help="可选标签；可重复传入，也可用逗号分隔。",
+    ),
+    note: str | None = typer.Option(None, "--note", help="可选的个人备注。"),
+) -> None:
+    """Save one manually entered idea card into immutable local Raw storage."""
+
+    settings = _load_settings()
+    parsed_tags = [
+        tag_part.strip()
+        for tag in tags
+        for tag_part in tag.split(",")
+        if tag_part.strip()
+    ]
+    try:
+        document = IdeaCardImporter(raw_dir=settings.raw_dir).create(
+            content,
+            source_url=source_url,
+            tags=parsed_tags,
+            note=note,
+        )
+    except IdeaCardError as exc:
+        raise typer.BadParameter(str(exc), param_hint="content") from exc
+
+    typer.echo("status: saved")
+    typer.echo(f"id: {document.id}")
+    typer.echo(f"content_type: {document.content_type}")
+    typer.echo(f"source_type: {document.source_type}")
+    typer.echo(f"raw_text: {document.original_file}")
+    typer.echo(f"metadata: {document.metadata['metadata_file']}")
+
+
+app.command("create-idea")(add_idea)
 
 
 def main() -> None:
