@@ -14,6 +14,7 @@ from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
 from pkb.qa import QAError, QAService
 from pkb.retrieval import RetrievalService
+from pkb.scripts import ScriptGenerationError, ScriptWriter
 from pkb.storage import RawStorage
 from pkb.topics import TopicGenerationError, TopicGenerator
 
@@ -429,6 +430,87 @@ def generate_topics_command(
             )
         for reason in candidate.reasons:
             typer.echo(f"  reason_{reason.rule}: {reason.explanation}")
+
+
+@app.command("write-script")
+def write_script_command(
+    topic: str | None = typer.Argument(
+        None,
+        help="已选择的 TopicCandidate 标题或稳定 ID。",
+    ),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        "--confirmed",
+        help="确认这是用户人工选择的选题；未传入时不会生成口播。",
+    ),
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the configured JSON index path.",
+    ),
+    knowledge_dir: Path | None = typer.Option(
+        None,
+        "--knowledge-dir",
+        help="Override the local Topic Knowledge directory.",
+    ),
+    notes_dir: Path | None = typer.Option(
+        None,
+        "--notes-dir",
+        help="Override the local Markdown Notes directory.",
+    ),
+    raw_dir: Path | None = typer.Option(
+        None,
+        "--raw-dir",
+        help="Override the immutable Raw directory.",
+    ),
+    limit: int = typer.Option(10, "--limit", min=1, help="最多使用的二次检索候选数量。"),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="以 JSON 输出完整的口播、检索结果和来源链。",
+    ),
+) -> None:
+    """Write a traceable 2–3 minute script after explicit topic confirmation."""
+
+    settings = _load_settings()
+    service = ScriptWriter(
+        index_path=index_path or settings.index_dir / "index.json",
+        knowledge_dir=knowledge_dir or settings.knowledge_dir,
+        notes_dir=notes_dir or settings.notes_dir,
+        raw_dir=raw_dir or settings.raw_dir,
+    )
+    try:
+        result = service.write(topic, confirmed=confirm, limit=limit)
+    except ScriptGenerationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="topic") from exc
+
+    if as_json:
+        typer.echo(
+            json.dumps(
+                result.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+        )
+        return
+
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"selection_confirmed: {result.selection_confirmed}")
+    if result.topic:
+        typer.echo(f"topic: {result.topic}")
+    typer.echo(f"message: {result.message}")
+    if result.script:
+        typer.echo("script:")
+        typer.echo(result.script)
+    typer.echo(f"sources: {len(result.sources)}")
+    for source in result.sources:
+        location = source.path or source.reference or source.source_id
+        availability = "available" if source.available else "unavailable"
+        typer.echo(f"- {source.kind}: {source.source_id} ({availability}) {location}")
+    for item in result.evidence:
+        typer.echo(f"evidence_{item.source_kind}: {item.explanation}")
 
 
 def main() -> None:
