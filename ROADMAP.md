@@ -396,9 +396,11 @@ Acceptance:
 
 ## TASK-012 — Script Writer
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-011, TASK-008  
 Suggested branch: `feat/script-writer`
+
+Acceptance record: 2026-09-08 MAIN discovered unreported worker changes through the Active Task worktree scan, then verified explicit human-confirmation gating, fresh Retrieval on every confirmed request, 2–3 minute bounded Chinese script output, traceable Knowledge/Notes/Raw evidence, no-evidence results without fabrication, deterministic Mock-provider coverage, CLI output, no vector database or network use, branch-level tests (53 passed), and merged-main regression (53 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Flow:
 
@@ -503,7 +505,7 @@ Acceptance:
 
 ## TASK-016 — Streamlit MVP
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-010, TASK-011, TASK-012  
 Suggested branch: `feat/web-ui`
 
