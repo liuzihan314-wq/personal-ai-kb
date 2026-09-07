@@ -4,9 +4,17 @@
 
 - 产品、架构和技术栈分别以 PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md 为准；调度遵循 CODEX_HANDOFF.md 和用户最新指令。
 - MAIN 维护 ROADMAP，负责依赖、Scope、验收和合并建议；Worker 不修改设计文档或 ROADMAP。
-- MAIN 默认使用 gpt-5.6-terra 进行理解、拆解、调度、审查和验收；普通 Worker 请求 gpt-5.6-luna / max，使用最小完整 Task Brief。不得宣称未经验证的实际模型路由。
+- MAIN 默认使用 gpt-5.6-terra 进行理解、拆解、调度、审查和验收；普通 Worker 请求 gpt-5.6-luna / max，使用最小完整 Task Brief。Luna 连续两轮验收失败后，由 Terra MAIN 分析；必要时才升级为 gpt-5.6-sol。GPT-6 不作为常驻调度模型。不得宣称未经验证的实际模型路由。
 - 同时最多 3 个实现 Worker；依赖 DONE、任务 READY、文件范围独立才可并行。并行实现必须独立 feature branch + worktree。
 - 连续两轮验收失败，停止重试并交 MAIN 分析；不得扩大范围。
+
+## Task and worker organization
+
+- 长期开发任务优先使用同一 Codex Project 中可见、可追踪的独立 Task / Thread，命名为 `TASK-XXX｜功能名称`。它应保留独立上下文，能回到同一 Worker 返工，并可绑定独立 branch + worktree。
+- 当前工具环境若未暴露创建可见 Task / Thread 的能力，MAIN 必须先说明实际可用能力、侧边栏可见性、上下文持续性与 worktree 绑定能力，等待用户决定；不得把隐藏后台 subagent 假称为可见 Task / Thread，也不得用大量隐藏 subagent 替代长期 Worker。
+- 后台 subagent 仅用于短时调查、资料搜索、报错分析或第二意见；需要写代码、多轮修改、返工、验收或独立 branch/worktree 的任务不使用后台 subagent。
+- Worker 只读取完成当前 TASK 所需内容，只改 Task Brief 允许的文件，测试后报告 `READY_FOR_REVIEW` 或 `BLOCKED`。不得修改 ROADMAP、新增任务、扩张范围、无关重构、合并或自行进入下一 TASK。
+- Worker 完成报告必须包含 TASK、STATUS、完成内容、修改文件、测试与结果、未解决问题、风险、Branch、Worktree、Commit 与验收步骤。MAIN 仅在验收 PASS 后更新 ROADMAP、标记 DONE、建议 merge 或解锁依赖。
 
 ## Directory contract
 

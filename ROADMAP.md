@@ -94,12 +94,12 @@ Acceptance:
 
 ## TASK-001 — Git + Repository Foundation
 
-Status: IN_PROGRESS  
+Status: DONE  
 Dependencies: TASK-000
 
 Owner: MAIN（Git / GitHub / 验收）+ TASK-001 Worker（README / 忽略规则 / 无密钥模板）
 
-Progress: 2026-09-06 本地 main 已初始化，基础文件子范围经 MAIN 复核 PASS；尚无 commit / remote / push。等待 GitHub 登录、提交身份及具体首次提交批准，TASK-001 尚未完整验收，TASK-002 保持 BLOCKED。
+Progress: 2026-09-07 本地 main 已初始化，基础文件子范围经 MAIN 复核 PASS；首次提交 27fd0b1 已推送至已核验的 GitHub Private Repository，远端 main 与本地一致。TASK-001 完整验收通过；TASK-002 现为 READY。
 
 Scope:
 
