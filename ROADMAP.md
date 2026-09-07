@@ -304,9 +304,11 @@ Acceptance:
 
 ## TASK-008 — Retrieval Service
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-007  
 Suggested branch: `feat/retrieval`
+
+Acceptance record: 2026-09-07 MAIN verified the allowed scope, read-only local Index retrieval, deterministic and explainable title/tag/keyword/topic/Related ranking, source paths, clear no-match results, CLI search, no vector database or network use, branch-level tests (5 passed), and merged-main regression (38 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
@@ -329,9 +331,11 @@ Acceptance:
 
 ## TASK-009 — Knowledge Compiler
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-006, TASK-007  
 Suggested branch: `feat/knowledge-compiler`
+
+Acceptance record: 2026-09-07 MAIN verified the allowed scope, traceable Topic Knowledge compilation from Notes, source links back through Notes to Raw, safe replacement when a topic gains material, Raw/Notes/Index read-only behavior, Mock provider use, branch-level tests (6 passed), and merged-main regression (38 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
@@ -353,7 +357,7 @@ Acceptance:
 
 ## TASK-010 — Q&A / Topic Synthesis
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-008, TASK-009  
 Suggested branch: `feat/qa`
 
@@ -367,7 +371,7 @@ Acceptance:
 
 ## TASK-011 — Topic Generator
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-008, TASK-009  
 Suggested branch: `feat/topic-generator`
 
