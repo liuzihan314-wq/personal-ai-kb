@@ -278,7 +278,7 @@ TASK-007 与 TASK-008 部分可在共同基础完成后拆 Worker，但 MAIN 应
 
 ## TASK-007 — Index + Related
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-006  
 Suggested branch: `feat/index-related`
 
