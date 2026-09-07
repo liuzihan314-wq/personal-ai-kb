@@ -248,9 +248,11 @@ Acceptance:
 
 ## TASK-006 — Single-document AI Notes
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-003, TASK-004, TASK-005  
 Suggested branch: `feat/ai-notes`
+
+Acceptance record: 2026-09-07 MAIN verified five synthetic document Notes, PDF and idea rendering, YAML frontmatter, Raw non-overwrite, Note duplicate idempotence, MockAIProvider-only processing, CLI generation, `uv sync`, and `pytest` (22 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
@@ -276,7 +278,7 @@ TASK-007 与 TASK-008 部分可在共同基础完成后拆 Worker，但 MAIN 应
 
 ## TASK-007 — Index + Related
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-006  
 Suggested branch: `feat/index-related`
 
