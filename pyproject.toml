@@ -1,0 +1,30 @@
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "personal-ai-kb"
+version = "0.1.0"
+description = "A local, traceable personal AI knowledge base."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-settings>=2.7,<3",
+    "typer>=0.16,<1",
+]
+
+[project.scripts]
+pkb = "pkb.cli.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+]
+
+[tool.uv.build-backend]
+module-name = "pkb"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["src"]
+testpaths = ["tests"]
