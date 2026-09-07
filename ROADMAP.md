@@ -200,9 +200,11 @@ Acceptance:
 
 ## TASK-004 — Idea / Quote Card
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-002, TASK-003（UnifiedDocument / Raw interface）
 Suggested branch: `feat/idea-card`
+
+Acceptance record: 2026-09-07 MAIN verified immutable UTF-8 idea-card Raw records, optional source/tags/note, duplicate idempotence, PDF Raw regression, CLI add-idea execution, and full `pytest` (17 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
@@ -246,7 +248,7 @@ Acceptance:
 
 ## TASK-006 — Single-document AI Notes
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-003, TASK-004, TASK-005  
 Suggested branch: `feat/ai-notes`
 
