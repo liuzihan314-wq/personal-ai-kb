@@ -505,9 +505,11 @@ Acceptance:
 
 ## TASK-016 — Streamlit MVP
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-010, TASK-011, TASK-012  
 Suggested branch: `feat/web-ui`
+
+Acceptance record: 2026-09-08 MAIN discovered unreported worker changes through the Active Task worktree scan, then verified that the single-page UI delegates to existing Core Services, preserves explicit topic confirmation before Script Writer, supports the V1 daily flow, includes the required project-local Streamlit dependency and lock update, performs PDF/idea minimum vertical slices, and contains UI tests. The system did not provide `uv`; MAIN bootstrapped it only in the Task worktree's local `.venv`, ran `uv sync --locked`, verified Streamlit 1.63.0 import, then ran merged-main regression (60 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 UI 最少包含：
 
