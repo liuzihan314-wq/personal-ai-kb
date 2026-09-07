@@ -14,6 +14,7 @@ from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
 from pkb.retrieval import RetrievalService
 from pkb.storage import RawStorage
+from pkb.topics import TopicGenerationError, TopicGenerator
 
 
 app = typer.Typer(
@@ -274,6 +275,82 @@ def search(
 
 # ``retrieve`` is a CLI spelling kept for callers that use the service name.
 app.command("retrieve")(search)
+
+
+@app.command("generate-topics")
+def generate_topics_command(
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the configured JSON index path.",
+    ),
+    knowledge_dir: Path | None = typer.Option(
+        None,
+        "--knowledge-dir",
+        help="Override the local Topic Knowledge directory.",
+    ),
+    notes_dir: Path | None = typer.Option(
+        None,
+        "--notes-dir",
+        help="Override the local Markdown Notes directory.",
+    ),
+    limit: int = typer.Option(
+        5,
+        "--limit",
+        min=3,
+        max=5,
+        help="最多返回 3～5 个候选选题。",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="以 JSON 输出完整的可追溯候选结果。",
+    ),
+) -> None:
+    """Generate explainable content topics from local Index, Knowledge, and Notes."""
+
+    settings = _load_settings()
+    target_index_path = index_path or settings.index_dir / "index.json"
+    target_knowledge_dir = knowledge_dir or settings.knowledge_dir
+    target_notes_dir = notes_dir or settings.notes_dir
+    try:
+        result = TopicGenerator(
+            index_path=target_index_path,
+            knowledge_dir=target_knowledge_dir,
+            notes_dir=target_notes_dir,
+        ).generate(limit=limit)
+    except TopicGenerationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="index_path") from exc
+
+    if as_json:
+        typer.echo(
+            json.dumps(
+                result.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+        )
+        return
+
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"message: {result.message}")
+    typer.echo(f"candidates: {len(result.candidates)}")
+    for rank, candidate in enumerate(result.candidates, start=1):
+        typer.echo(f"- rank: {rank}")
+        typer.echo(f"  title: {candidate.title}")
+        typer.echo(f"  score: {candidate.score:.4f}")
+        typer.echo(f"  why_worth_doing: {candidate.why_worth_doing}")
+        for source in candidate.sources:
+            typer.echo(
+                f"  source_{source.kind}: {source.source_id} ({source.path})"
+            )
+        for evidence in candidate.evidence:
+            typer.echo(
+                f"  evidence_{evidence.signal}: {', '.join(evidence.values)}"
+            )
+        for reason in candidate.reasons:
+            typer.echo(f"  reason_{reason.rule}: {reason.explanation}")
 
 
 def main() -> None:

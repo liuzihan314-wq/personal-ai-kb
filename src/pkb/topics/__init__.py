@@ -1,0 +1,51 @@
+"""Deterministic, traceable content-topic generation from the local KB."""
+
+from pkb.topics.model import (
+    GenerateTopicsResult,
+    TopicCandidate,
+    TopicCandidateReason,
+    TopicCandidateSource,
+    TopicEvidence,
+    TopicGenerationResult,
+    TopicGenerationStatus,
+    TopicReason,
+    TopicSignal,
+    TopicSource,
+    TopicSourceKind,
+)
+from pkb.topics.service import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    RECENT_DAYS,
+    TopicGenerationError,
+    TopicGenerationResultType,
+    TopicGenerator,
+    TopicService,
+    build_topics,
+    generate_topic_candidates,
+    generate_topics,
+)
+
+__all__ = [
+    "DEFAULT_LIMIT",
+    "GenerateTopicsResult",
+    "MAX_LIMIT",
+    "RECENT_DAYS",
+    "TopicCandidate",
+    "TopicCandidateReason",
+    "TopicCandidateSource",
+    "TopicEvidence",
+    "TopicGenerationError",
+    "TopicGenerationResult",
+    "TopicGenerationResultType",
+    "TopicGenerationStatus",
+    "TopicGenerator",
+    "TopicReason",
+    "TopicService",
+    "TopicSignal",
+    "TopicSource",
+    "TopicSourceKind",
+    "build_topics",
+    "generate_topic_candidates",
+    "generate_topics",
+]
