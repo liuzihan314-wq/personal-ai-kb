@@ -1,0 +1,216 @@
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pymupdf
+
+from pkb.index import IndexBuilder
+from pkb.knowledge import KnowledgeSource, KnowledgeStorage, TopicKnowledge
+from pkb.models import UnifiedDocument
+from pkb.notes import Note, NoteStorage
+from pkb.providers import MockAIProvider
+from pkb.storage import RawStorage
+from pkb.topics import TopicCandidate, TopicEvidence, TopicReason, TopicSource
+from pkb.ui import UIPaths, UIService, can_generate_script
+
+
+NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+
+
+def _make_pdf(text: str) -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text)
+    payload = document.tobytes()
+    document.close()
+    return payload
+
+
+def _seed_script_library(data_dir: Path) -> TopicCandidate:
+    paths = UIPaths.from_data_dir(data_dir)
+    note_storage = NoteStorage(paths.notes_dir)
+    raw_storage = RawStorage(paths.raw_dir)
+    notes: list[Note] = []
+    for document_id, title, summary in (
+        ("workflow-1", "AI 工作流：从工具到流程", "把 AI 工具组合成可复用的效率流程。"),
+        ("workflow-2", "AI 工作流：自动化减少重复劳动", "自动化要嵌入工作流，先验证具体任务的收益。"),
+        ("workflow-3", "AI 工作流：先改流程再换工具", "效率提升首先来自流程设计，而不是工具数量。"),
+    ):
+        note = Note(
+            document_id=document_id,
+            source_type="manual",
+            title=title,
+            content_type="idea",
+            tags=["AI", "workflow"],
+            summary=summary,
+            key_points=[f"把“{title}”拆成可验证的具体步骤。"],
+            quotes=["先把任务拆成流程，再决定工具。"],
+            original_content=summary,
+            source_reference=f"raw:{document_id}",
+        )
+        notes.append(note)
+        note_storage.write(note)
+        raw_storage.store(
+            UnifiedDocument(
+                id=document_id,
+                content_type="idea",
+                title=title,
+                content=summary,
+                source_type="manual",
+            ),
+            summary.encode("utf-8"),
+        )
+
+    index = IndexBuilder(paths.notes_dir, paths.index_path).rebuild()
+    KnowledgeStorage(paths.knowledge_dir).write(
+        TopicKnowledge(
+            topic="AI 工作流",
+            created_at=NOW,
+            updated_at=NOW,
+            source_note_ids=[note.document_id for note in notes],
+            source_references=[note.source_reference for note in notes],
+            synthesis="把 AI 工具放进可复用的工作流，并用结果验证取舍。",
+            sources=[
+                KnowledgeSource(
+                    note_id=note.document_id,
+                    raw_document_id=note.document_id,
+                    title=note.title,
+                    reference=note.source_reference,
+                )
+                for note in notes
+            ],
+        ),
+    )
+    note_sources = [
+        TopicSource(
+            kind="note",
+            source_id=note.document_id,
+            title=note.title,
+            path=str(next(entry.note_path for entry in index.entries if entry.document_id == note.document_id)),
+            reference=note.source_reference,
+            content_type=note.content_type,
+        )
+        for note in notes
+    ]
+    return TopicCandidate(
+        title="AI 工作流",
+        why_worth_doing="三条本地材料都指向可复用的 AI 工作流。",
+        score=0.8,
+        sources=note_sources,
+        evidence=[
+            TopicEvidence(
+                signal="tag",
+                values=["AI", "workflow"],
+                source_ids=[note.document_id for note in notes],
+                explanation="共同标签形成主题交集。",
+            ),
+            TopicEvidence(
+                signal="title",
+                values=[note.title for note in notes],
+                source_ids=[note.document_id for note in notes],
+                explanation="标题都保留了 AI 工作流方向。",
+            ),
+        ],
+        reasons=[
+            TopicReason(
+                rule="local_overlap",
+                matches=[note.document_id for note in notes],
+                weight=0.8,
+                explanation="多个本地来源有稳定重合信号。",
+            ),
+        ],
+    )
+
+
+def test_ui_paths_follow_the_project_data_contract(tmp_path):
+    paths = UIPaths.from_data_dir(tmp_path)
+
+    assert paths.raw_dir == tmp_path / "raw"
+    assert paths.notes_dir == tmp_path / "notes"
+    assert paths.knowledge_dir == tmp_path / "knowledge"
+    assert paths.index_path == tmp_path / "index" / "index.json"
+
+
+def test_pdf_import_runs_the_minimal_persisted_ui_slice(tmp_path):
+    service = UIService(
+        UIPaths.from_data_dir(tmp_path),
+        provider=MockAIProvider(),
+    )
+
+    result = service.import_pdf("workflow.pdf", _make_pdf("AI 工作流需要先拆解任务。"))
+
+    assert result.document.content_type == "pdf"
+    assert result.note.note.document_id == result.document.id
+    assert result.note.path.is_file()
+    assert result.index.entries[0].document_id == result.document.id
+    assert UIService(UIPaths.from_data_dir(tmp_path)).search("AI").found
+
+
+def test_idea_card_updates_note_and_index_without_reimplementing_storage(tmp_path):
+    service = UIService(
+        UIPaths.from_data_dir(tmp_path),
+        provider=MockAIProvider(),
+    )
+
+    result = service.add_idea(
+        "先改流程，再换工具。",
+        source_url="https://example.test/idea",
+        tags=["AI", "workflow"],
+    )
+
+    assert result.document.content_type == "idea"
+    assert result.document.tags == ["AI", "workflow"]
+    assert result.note.note.original_content == result.document.content
+    assert result.index.entries[0].document_id == result.document.id
+
+
+def test_unconfirmed_topic_cannot_enable_or_generate_script(tmp_path):
+    provider = MockAIProvider()
+    service = UIService(UIPaths.from_data_dir(tmp_path), provider=provider)
+
+    result = service.write_script(None, confirmed=False)
+
+    assert not can_generate_script([], None, confirmed=False)
+    assert result.status == "not_confirmed"
+    assert result.script is None
+    assert provider.calls == []
+
+
+def test_confirmed_candidate_uses_script_writer_retrieval_and_source_chain(tmp_path):
+    candidate = _seed_script_library(tmp_path)
+    provider = MockAIProvider()
+    service = UIService(UIPaths.from_data_dir(tmp_path), provider=provider)
+
+    assert can_generate_script([candidate], candidate.title, confirmed=True)
+    result = service.write_script(candidate, confirmed=True)
+
+    assert result.status == "generated"
+    assert result.selection_confirmed is True
+    assert result.retrieval.query == candidate.title
+    assert result.retrieval.candidates
+    assert {source.kind for source in result.sources} == {"knowledge", "note", "raw"}
+    assert result.evidence
+    assert "write_script" in provider.calls
+
+
+def test_topic_synthesis_and_qa_use_the_existing_core_services(tmp_path):
+    _seed_script_library(tmp_path)
+    service = UIService(
+        UIPaths.from_data_dir(tmp_path),
+        provider=MockAIProvider(),
+    )
+
+    knowledge = service.synthesize_topic("AI 工作流")
+    topics = service.generate_topics()
+    answer = service.answer("AI", limit=3)
+
+    assert knowledge.path.is_file()
+    assert knowledge.knowledge.source_note_ids
+    assert topics.candidates
+    assert answer.status == "answered"
+    assert answer.sources
+
+
+def test_streamlit_entrypoint_module_is_importable():
+    from pkb.ui import app
+
+    assert callable(app.main)
