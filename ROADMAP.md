@@ -200,7 +200,7 @@ Acceptance:
 
 ## TASK-004 — Idea / Quote Card
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-002, TASK-003（UnifiedDocument / Raw interface）
 Suggested branch: `feat/idea-card`
 
