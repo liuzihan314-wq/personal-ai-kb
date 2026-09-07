@@ -9,6 +9,8 @@ from pkb.config import Settings, get_settings
 from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
 from pkb.logging_config import configure_logging
+from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
+from pkb.storage import RawStorage
 
 
 app = typer.Typer(
@@ -122,6 +124,33 @@ def add_idea(
 
 
 app.command("create-idea")(add_idea)
+
+
+@app.command("generate-note")
+def generate_note(
+    document_id: str = typer.Argument(..., help="已保存 Raw 文档的 ID。"),
+) -> None:
+    """Generate one local Markdown Note from an existing Raw document."""
+
+    settings = _load_settings()
+    try:
+        document = RawStorage(settings.raw_dir).load_document(document_id)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter(
+            f"找不到完整的 Raw 文档：{document_id}",
+            param_hint="document_id",
+        ) from exc
+
+    try:
+        result = NoteService(notes_dir=settings.notes_dir).generate(document)
+    except (NoteGenerationError, NoteStorageError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="document_id") from exc
+
+    typer.echo("status: generated" if result.created else "status: existing")
+    typer.echo(f"id: {result.note.document_id}")
+    typer.echo(f"title: {result.note.title}")
+    typer.echo(f"source_type: {result.note.source_type}")
+    typer.echo(f"note: {result.path}")
 
 
 def main() -> None:
