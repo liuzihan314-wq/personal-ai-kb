@@ -278,9 +278,11 @@ TASK-007 与 TASK-008 部分可在共同基础完成后拆 Worker，但 MAIN 应
 
 ## TASK-007 — Index + Related
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-006  
 Suggested branch: `feat/index-related`
+
+Acceptance record: 2026-09-07 MAIN verified local JSON rebuild/read, explainable symmetric Related links, no false relation for unrelated Notes, non-mutating Note rebuilds, corrupt-input errors, `uv sync`, `pytest` (27 passed), and CLI index rebuild/status. The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
@@ -302,7 +304,7 @@ Acceptance:
 
 ## TASK-008 — Retrieval Service
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-007  
 Suggested branch: `feat/retrieval`
 
@@ -327,7 +329,7 @@ Acceptance:
 
 ## TASK-009 — Knowledge Compiler
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-006, TASK-007  
 Suggested branch: `feat/knowledge-compiler`
 
