@@ -8,6 +8,7 @@ import typer
 from pkb.config import Settings, get_settings
 from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
+from pkb.index import IndexBuildError, IndexService, IndexStorageError, read_index
 from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
 from pkb.storage import RawStorage
@@ -151,6 +152,66 @@ def generate_note(
     typer.echo(f"title: {result.note.title}")
     typer.echo(f"source_type: {result.note.source_type}")
     typer.echo(f"note: {result.path}")
+
+
+@app.command("rebuild-index")
+def rebuild_index(
+    notes_dir: Path | None = typer.Option(
+        None,
+        "--notes-dir",
+        help="Override the configured Markdown Notes directory.",
+    ),
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the output JSON index path.",
+    ),
+) -> None:
+    """Rebuild the local JSON index from the current Markdown Notes."""
+
+    settings = _load_settings()
+    target_notes_dir = notes_dir or settings.notes_dir
+    target_index_path = index_path or settings.index_dir / "index.json"
+    try:
+        index = IndexService(
+            notes_dir=target_notes_dir,
+            index_path=target_index_path,
+        ).rebuild()
+    except (IndexBuildError, IndexStorageError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="notes_dir") from exc
+
+    typer.echo("status: rebuilt")
+    typer.echo(f"notes: {len(index.entries)}")
+    typer.echo(f"related: {index.related_count}")
+    typer.echo(f"index: {target_index_path}")
+
+
+@app.command("index-status")
+def index_status(
+    index_path: Path | None = typer.Option(
+        None,
+        "--index-path",
+        help="Override the configured JSON index path.",
+    ),
+) -> None:
+    """Read the local JSON index and report its current size."""
+
+    settings = _load_settings()
+    target_index_path = index_path or settings.index_dir / "index.json"
+    try:
+        index = read_index(target_index_path)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter(
+            f"JSON index does not exist: {target_index_path}",
+            param_hint="index_path",
+        ) from exc
+    except IndexStorageError as exc:
+        raise typer.BadParameter(str(exc), param_hint="index_path") from exc
+
+    typer.echo("status: ok")
+    typer.echo(f"notes: {len(index.entries)}")
+    typer.echo(f"related: {index.related_count}")
+    typer.echo(f"index: {target_index_path}")
 
 
 def main() -> None:
