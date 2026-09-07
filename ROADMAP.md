@@ -396,7 +396,7 @@ Acceptance:
 
 ## TASK-012 — Script Writer
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-011, TASK-008  
 Suggested branch: `feat/script-writer`
 
