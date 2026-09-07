@@ -505,7 +505,7 @@ Acceptance:
 
 ## TASK-016 — Streamlit MVP
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-010, TASK-011, TASK-012  
 Suggested branch: `feat/web-ui`
 
