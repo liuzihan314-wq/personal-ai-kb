@@ -357,9 +357,11 @@ Acceptance:
 
 ## TASK-010 — Q&A / Topic Synthesis
 
-Status: READY
+Status: DONE
 Dependencies: TASK-008, TASK-009  
 Suggested branch: `feat/qa`
+
+Acceptance record: 2026-09-08 MAIN discovered unreported worker changes through the Active Task worktree scan, then verified allowed scope, local-only Knowledge/Notes/Raw evidence chains, structured no-hit and insufficient-evidence states, deterministic Mock-provider test coverage, CLI output, no vector database or network use, branch-level tests (45 passed), and merged-main regression (49 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Acceptance:
 
@@ -371,9 +373,11 @@ Acceptance:
 
 ## TASK-011 — Topic Generator
 
-Status: READY
+Status: DONE
 Dependencies: TASK-008, TASK-009  
 Suggested branch: `feat/topic-generator`
+
+Acceptance record: 2026-09-08 MAIN discovered unreported worker changes through the Active Task worktree scan, then verified allowed scope, 3–5 explainable local candidates, explicit moderate recency rule, idea-card evidence, source traceability, insufficient-data results without invented candidates, CLI output, no vector database or network use, branch-level tests (42 passed), and merged-main regression (49 passed). The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003. The concurrent CLI conflict was resolved by MAIN by retaining both independent commands, then tested on merged main.
 
 Scope:
 
@@ -392,7 +396,7 @@ Acceptance:
 
 ## TASK-012 — Script Writer
 
-Status: BLOCKED  
+Status: READY
 Dependencies: TASK-011, TASK-008  
 Suggested branch: `feat/script-writer`
 
