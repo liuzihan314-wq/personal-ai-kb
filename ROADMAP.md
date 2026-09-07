@@ -248,7 +248,7 @@ Acceptance:
 
 ## TASK-006 — Single-document AI Notes
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-003, TASK-004, TASK-005  
 Suggested branch: `feat/ai-notes`
 
