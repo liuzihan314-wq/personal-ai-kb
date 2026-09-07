@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,13 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     data_dir: Path = Path("data")
+
+    # Provider settings are deliberately generic. Concrete adapters decide how
+    # to use them; the core never selects a vendor, model, or endpoint.
+    ai_provider: str | None = None
+    ai_model: str | None = None
+    ai_base_url: str | None = None
+    ai_api_key: SecretStr | None = Field(default=None, repr=False)
 
     @property
     def raw_dir(self) -> Path:
