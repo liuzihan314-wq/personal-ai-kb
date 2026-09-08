@@ -530,9 +530,11 @@ Acceptance:
 
 ## TASK-020 — UI Visual Redesign
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-016
 Suggested branch: `feat/ui-visual-redesign`
+
+Acceptance record: 2026-09-08 MAIN verified the allowed UI-only scope, no new dependencies or external assets, retained Core-service delegation and explicit script-confirmation gate, narrow-screen and desktop rendering against the user-provided visual reference, and full merged-main regression (61 passed). The visual system uses original CSS gradients and shapes rather than reference-image content. The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
 
 Scope:
 
