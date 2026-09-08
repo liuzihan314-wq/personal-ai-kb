@@ -175,6 +175,36 @@ def test_unconfirmed_topic_cannot_enable_or_generate_script(tmp_path):
     assert provider.calls == []
 
 
+def test_topic_gate_requires_selection_then_explicit_confirmation(tmp_path):
+    from pkb.ui.app import _html, _topic_gate_state
+
+    candidate = _seed_script_library(tmp_path)
+
+    status, message, allowed = _topic_gate_state([], None, confirmed=False)
+    assert status == "待选择"
+    assert "选择" in message
+    assert allowed is False
+
+    status, message, allowed = _topic_gate_state(
+        [candidate],
+        candidate.title,
+        confirmed=False,
+    )
+    assert status == "待确认"
+    assert "确认" in message
+    assert allowed is False
+
+    status, message, allowed = _topic_gate_state(
+        [candidate],
+        candidate.title,
+        confirmed=True,
+    )
+    assert status == "已确认"
+    assert "生成口播" in message
+    assert allowed is True
+    assert _html('<unsafe & "value">') == "&lt;unsafe &amp; &quot;value&quot;&gt;"
+
+
 def test_confirmed_candidate_uses_script_writer_retrieval_and_source_chain(tmp_path):
     candidate = _seed_script_library(tmp_path)
     provider = MockAIProvider()
