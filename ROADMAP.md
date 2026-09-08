@@ -528,6 +528,28 @@ Acceptance:
 
 ---
 
+## TASK-020 — UI Visual Redesign
+
+Status: IN_PROGRESS
+Dependencies: TASK-016
+Suggested branch: `feat/ui-visual-redesign`
+
+Scope:
+
+- 以用户提供的移动端卡片参考图为视觉参考，重做 Streamlit MVP 的布局、色彩、信息层级与响应式体验
+- 保留现有导入、检索、知识综合、选题确认与口播业务流程
+- 使用代码生成的颜色、渐变与装饰，不引入参考图的人物、品牌或素材
+
+Acceptance:
+
+- 页面具有一致的圆角卡片、浅色背景、彩色重点区与清晰行动入口
+- 桌面与窄屏均可使用
+- 用户仍可完成完整 V1 日常操作流程
+- UI 不复制 Core 业务逻辑
+- 现有 UI 与全量回归测试通过
+
+---
+
 # M7 — Cross-platform Hardening
 
 ## TASK-017 — Windows Core Smoke Test
