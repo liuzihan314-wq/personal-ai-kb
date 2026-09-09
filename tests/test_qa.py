@@ -6,7 +6,7 @@ from pkb.index import IndexEntry, IndexFile
 from pkb.knowledge import KnowledgeSource, KnowledgeStorage, TopicKnowledge
 from pkb.models import UnifiedDocument
 from pkb.notes import Note, NoteStorage
-from pkb.providers import MockAIProvider
+from pkb.providers import MockAIProvider, UnconfiguredProvider
 from pkb.qa import QAService
 from pkb.storage import RawStorage
 from typer.testing import CliRunner
@@ -289,6 +289,26 @@ def test_index_hit_without_readable_content_is_insufficient_evidence(tmp_path):
     assert result.retrieval.status == "ok"
     assert result.note_sources[0].available is False
     assert provider.calls == []
+
+
+def test_unconfigured_provider_returns_evidence_without_a_fake_answer(tmp_path):
+    notes_dir = tmp_path / "notes"
+    knowledge_dir = tmp_path / "knowledge"
+    note = _note("video-1", "AI 视频工具", "文生视频、图生视频和剪辑工具各有用途。")
+    NoteStorage(notes_dir).write(note)
+    index = IndexBuilder(notes_dir, clock=lambda: FIXED_TIME).build()
+
+    result = QAService(
+        index=index,
+        knowledge_dir=knowledge_dir,
+        notes_dir=notes_dir,
+        provider=UnconfiguredProvider(),
+    ).answer("AI 视频制作有哪些工具？")
+
+    assert result.status == "provider_not_configured"
+    assert result.answer is None
+    assert result.sources
+    assert "未配置 AI Provider" in result.reason
 
 
 def test_cli_ask_returns_traceable_json(tmp_path):

@@ -552,6 +552,31 @@ Acceptance:
 
 ---
 
+## TASK-021 — Usable AI Answering and Topic Resilience
+
+Status: DONE
+Dependencies: TASK-005, TASK-009, TASK-010, TASK-016
+Owner: MAIN（跨服务 Provider 接入与验收）
+
+Acceptance record: 2026-09-09 MAIN reproduced the user's two-PDF failure locally. Semantic duplicate Topic Knowledge pages (`ai视频` / `ai 视频`) now resolve deterministically to the most recently updated derived page without changing local data. The UI no longer presents test-only Mock output as a real answer. It selects a configured DeepSeek/OpenAI-compatible chat-completions provider, otherwise returns a structured `provider_not_configured` result with the local evidence chain intact. The adapter uses no vendor SDK, sends only the retrieved local context, and has contract tests for endpoint, headers and request body. MAIN verified the user's local data produces five topic candidates and a non-fabricated answer state; full regression: 65 passed. The existing upstream PyMuPDF/SWIG warning remains tracked under TASK-003.
+
+Scope:
+
+- 处理历史 Knowledge 派生页的语义重复，不能删除或迁移用户本地资料
+- 为 UI 配置真实的 OpenAI-compatible Provider，优先支持 DeepSeek
+- 未配置密钥时禁止将 Mock 文本伪装为用户可用回答
+- 保留 Q&A 的 Knowledge / Notes / Raw 证据链
+
+Acceptance:
+
+- 同主题的空格差异不会阻塞选题生成，且稳定选用最新 Knowledge
+- 当前本地两篇 PDF 能生成可解释的选题候选
+- 无 Provider 配置时 Q&A 返回证据与明确状态，不产生 Mock answer
+- 配置 Provider 后通过 `chat/completions` 生成仅基于本地证据的回答
+- 全量测试通过，`.env` 与 `data/` 不纳入 Git
+
+---
+
 # M7 — Cross-platform Hardening
 
 ## TASK-017 — Windows Core Smoke Test

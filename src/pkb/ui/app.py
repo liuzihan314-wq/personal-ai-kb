@@ -126,7 +126,7 @@ def _render_sidebar(service: UIService) -> None:
         st.divider()
         st.markdown('<div class="pkb-side-label">Storage</div>', unsafe_allow_html=True)
         st.caption(f"数据目录：{service.paths.data_dir}")
-        st.caption("V1 使用本地文件、Mock Provider 和 JSON Index。")
+        st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
 
 
 def _render_section_header(
@@ -354,12 +354,17 @@ def _render_search_qa_tab(service: UIService) -> None:
     _render_retrieval(st.session_state["search_result"], heading="检索结果")
     result = st.session_state["qa_result"]
     if result is not None:
+        status_class = (
+            "pkb-status-success"
+            if result.status == "answered"
+            else "pkb-status-pending"
+        )
         with st.container(border=True):
             st.markdown(
                 f"""
                 <div class="pkb-result-head">
                     <div>
-                        <span class="pkb-status-pill pkb-status-success">{_html(result.status)}</span>
+                        <span class="pkb-status-pill {status_class}">{_html(result.status)}</span>
                         <h3>回答</h3>
                     </div>
                     <div class="pkb-result-count"><small>EVIDENCE</small>{_html(result.evidence_level)}</div>

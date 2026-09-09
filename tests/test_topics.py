@@ -184,6 +184,48 @@ def test_topic_generation_order_is_stable_when_input_order_changes():
     ]
 
 
+def test_semantic_duplicate_knowledge_uses_the_latest_page_without_failing():
+    notes = [
+        _note(
+            "one",
+            "AI 视频工具路线",
+            created_at=NOW - timedelta(days=4),
+            tags=["AI", "视频"],
+            summary="文生视频和图生视频都需要先验证工作流。",
+        ),
+        _note(
+            "two",
+            "AI 视频制作流程",
+            created_at=NOW - timedelta(days=3),
+            tags=["AI", "视频"],
+            summary="工具选择要围绕脚本、生成和剪辑流程。",
+        ),
+    ]
+    older = _knowledge(notes).model_copy(
+        update={"topic": "ai视频", "updated_at": NOW - timedelta(minutes=1)}
+    )
+    newer = _knowledge(notes).model_copy(
+        update={"topic": "ai 视频", "updated_at": NOW}
+    )
+
+    result = generate_topics(
+        index=_index(notes),
+        knowledge=[older, newer],
+        notes=notes,
+        clock=lambda: NOW,
+    )
+
+    assert result.candidates
+    knowledge_sources = [
+        source
+        for candidate in result.candidates
+        for source in candidate.sources
+        if source.kind == "knowledge"
+    ]
+    assert knowledge_sources
+    assert {source.title for source in knowledge_sources} == {"ai 视频"}
+
+
 def test_recent_material_has_explicit_moderate_bonus():
     old = _note(
         "old",

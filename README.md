@@ -17,6 +17,23 @@ uv run streamlit run src/pkb/ui/app.py
 - 预期：浏览器打开本地页面后，可依次完成资料导入、观点卡片、检索 / 问答、主题综合、明确选择选题和口播生成。
 - 失败后：先确认当前目录是项目根目录且 Python 满足 `pyproject.toml` 的版本要求；若提示数据不存在，先通过页面导入一个文本型 PDF 或保存一张观点卡片。
 
+## 配置真实 AI 回答
+
+页面不会再把测试用的 Mock 输出当作回答。未配置 Provider 时，问答会保留本地证据和来源，但会明确提示尚未生成语义回答。
+
+复制 `.env.example` 为本机 `.env`，填入自己的 DeepSeek API Key 后重启 Streamlit：
+
+```dotenv
+PKB_AI_PROVIDER=deepseek
+PKB_AI_MODEL=deepseek-v4-flash
+PKB_AI_BASE_URL=https://api.deepseek.com
+PKB_AI_API_KEY=your-secret-key
+```
+
+- 目的：让导入、主题综合、问答和口播通过 OpenAI-compatible `chat/completions` 接口使用真实模型，同时回答仍只传入本地检索出的证据。
+- 预期：重启页面后，“生成回答”会给出中文回答与来源链；选题继续只在本地 Index、Notes 和 Knowledge 上运行。
+- 失败后：先确认 `.env` 位于项目根目录、四个变量均非空并重启页面；若服务端返回 HTTP 错误，核对 API Key、账户余额、模型名和 endpoint。不要把 `.env` 或 API Key 提交到 Git。
+
 ## 已批准技术栈
 
 - 运行环境：macOS 为主，Windows 作为备用兼容环境

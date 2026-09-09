@@ -7,7 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pkb.retrieval.model import RetrievalResult
 
 
-QAStatus = Literal["answered", "no_hits", "insufficient_evidence"]
+QAStatus = Literal[
+    "answered",
+    "no_hits",
+    "insufficient_evidence",
+    "provider_not_configured",
+]
 SourceKind = Literal["knowledge", "note", "raw"]
 EvidenceLevel = Literal[
     "none",

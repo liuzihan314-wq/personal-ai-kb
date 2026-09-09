@@ -249,11 +249,19 @@ def _load_notes(value: object | None) -> dict[str, _LoadedNote]:
 
 
 def _load_knowledge(value: object | None) -> list[_LoadedKnowledge]:
+    """Load one current Knowledge page per semantic topic.
+
+    Topic Knowledge is derived material.  Earlier UI versions could persist
+    the same CJK topic with or without an internal space (for example,
+    ``ai视频`` and ``ai 视频``).  Those files must not prevent topic
+    generation.  Keep the most recently updated page and leave both files
+    untouched so their provenance remains inspectable.
+    """
+
     if value is None:
         return []
 
-    loaded: list[_LoadedKnowledge] = []
-    seen_topics: set[str] = set()
+    loaded: dict[str, _LoadedKnowledge] = {}
     for item in _as_sequence(value):
         if isinstance(item, KnowledgeRecord):
             candidates = [_LoadedKnowledge(item.knowledge, str(item.path))]
@@ -272,13 +280,18 @@ def _load_knowledge(value: object | None) -> list[_LoadedKnowledge]:
 
         for parsed in candidates:
             topic_key = _canonical(parsed.knowledge.topic)
-            if topic_key in seen_topics:
-                raise TopicGenerationError(
-                    f"Duplicate Topic Knowledge topic: {parsed.knowledge.topic}"
-                )
-            seen_topics.add(topic_key)
-            loaded.append(parsed)
-    return loaded
+            existing = loaded.get(topic_key)
+            if existing is None or (
+                parsed.knowledge.updated_at,
+                parsed.knowledge.created_at,
+                parsed.path,
+            ) > (
+                existing.knowledge.updated_at,
+                existing.knowledge.created_at,
+                existing.path,
+            ):
+                loaded[topic_key] = parsed
+    return [loaded[key] for key in sorted(loaded)]
 
 
 def _index_from_notes(notes: Iterable[_LoadedNote], notes_dir: str) -> IndexFile:

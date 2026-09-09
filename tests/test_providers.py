@@ -1,4 +1,12 @@
-from pkb.providers import AIProvider, MockAIProvider, ProviderDocument
+from pkb.config import Settings
+from pkb.providers import (
+    AIProvider,
+    MockAIProvider,
+    OpenAICompatibleProvider,
+    ProviderDocument,
+    UnconfiguredProvider,
+    configured_provider,
+)
 
 
 def test_mock_provider_implements_protocol_and_supports_summary_call():
@@ -27,3 +35,45 @@ def test_mock_provider_allows_deterministic_response_overrides():
 
     assert answer == "The answer comes from the supplied context."
     assert provider.calls == ["answer_question"]
+
+
+def test_configured_provider_uses_openai_compatible_chat_completions_contract():
+    captured: dict[str, object] = {}
+
+    def transport(url, headers, body):
+        captured.update(url=url, headers=headers, body=body)
+        return {"choices": [{"message": {"content": "只基于本地资料的回答。"}}]}
+
+    provider = OpenAICompatibleProvider(
+        model="deepseek-test",
+        base_url="https://api.example.test/v1",
+        api_key="test-key",
+        transport=transport,
+    )
+
+    answer = provider.answer_question(
+        "资料说了什么？",
+        [ProviderDocument(document_id="note-1", title="本地 Note", content="本地内容")],
+    )
+
+    assert answer == "只基于本地资料的回答。"
+    assert captured["url"] == "https://api.example.test/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["body"]["model"] == "deepseek-test"
+    assert captured["body"]["stream"] is False
+
+
+def test_provider_selection_never_falls_back_to_mock_when_configuration_is_absent():
+    missing = Settings(_env_file=None)
+    configured = Settings(
+        _env_file=None,
+        ai_provider="deepseek",
+        ai_model="deepseek-test",
+        ai_base_url="https://api.example.test/v1",
+        ai_api_key="test-key",
+    )
+
+    assert isinstance(configured_provider(missing), UnconfiguredProvider)
+    provider = configured_provider(configured)
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.model == "deepseek-test"

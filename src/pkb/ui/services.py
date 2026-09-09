@@ -16,7 +16,7 @@ from pkb.ingest import IdeaCardImporter, PDFImporter
 from pkb.knowledge import KnowledgeCompiler, KnowledgeRecord
 from pkb.models import UnifiedDocument
 from pkb.notes import NoteGenerationResult, NoteService
-from pkb.providers import AIProvider
+from pkb.providers import AIProvider, configured_provider
 from pkb.qa import QAResult, QAService
 from pkb.retrieval import RetrievalResult, RetrievalService
 from pkb.scripts import ScriptResult, ScriptWriter
@@ -95,7 +95,9 @@ class UIService:
         provider: AIProvider | None = None,
     ) -> None:
         self.paths = paths or UIPaths.from_settings()
-        self.provider = provider
+        # Core services keep MockAIProvider for deterministic unit tests.  The
+        # user-facing UI must never present that fixture text as an AI answer.
+        self.provider = provider if provider is not None else configured_provider()
 
     def _persist_ingest(self, document: UnifiedDocument) -> IngestResult:
         note = NoteService(

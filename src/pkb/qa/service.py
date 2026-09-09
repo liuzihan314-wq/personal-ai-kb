@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pkb.config import get_settings
-from pkb.index.keywords import tokenize_text
+from pkb.index.keywords import normalize_term, tokenize_text
 from pkb.index.model import IndexFile
 from pkb.index.storage import IndexStorageError, read_index
 from pkb.knowledge.markdown import KnowledgeFormatError
@@ -13,7 +13,12 @@ from pkb.knowledge.storage import KnowledgeRecord, KnowledgeStorage, KnowledgeSt
 from pkb.notes.markdown import NoteFormatError, parse_note
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord, NoteStorage, NoteStorageError
-from pkb.providers import AIProvider, MockAIProvider, ProviderDocument
+from pkb.providers import (
+    AIProvider,
+    MockAIProvider,
+    ProviderDocument,
+    ProviderNotConfiguredError,
+)
 from pkb.retrieval.model import RetrievalCandidate, RetrievalResult
 from pkb.retrieval.service import RetrievalService, parse_query
 from pkb.storage import RawStorage, RawStorageError
@@ -67,6 +72,13 @@ class _RawMaterial:
     content: str
     original_path: Path
     extracted_path: Path
+
+
+def _knowledge_key(topic: str) -> str:
+    """Return the retrieval identity for a Topic Knowledge page."""
+
+    terms = tokenize_text(topic)
+    return " ".join(sorted(set(terms))) if terms else normalize_term(topic)
 
 
 def _excerpt(value: str, *, limit: int = 600) -> str:
@@ -210,14 +222,26 @@ class QAService:
         except OSError as exc:
             raise QAStorageError(f"Could not scan Knowledge directory: {directory}") from exc
 
-        records: list[KnowledgeRecord] = []
+        latest_by_topic: dict[str, KnowledgeRecord] = {}
         for path in paths:
             try:
                 knowledge = self.knowledge_storage.read(path)
             except (FileNotFoundError, KnowledgeStorageError, KnowledgeFormatError) as exc:
                 raise QAStorageError(f"Invalid Knowledge file: {path}") from exc
-            records.append(KnowledgeRecord(knowledge=knowledge, path=path, created=False))
-        return records
+            record = KnowledgeRecord(knowledge=knowledge, path=path, created=False)
+            key = _knowledge_key(knowledge.topic)
+            existing = latest_by_topic.get(key)
+            if existing is None or (
+                record.knowledge.updated_at,
+                record.knowledge.created_at,
+                record.path.as_posix(),
+            ) > (
+                existing.knowledge.updated_at,
+                existing.knowledge.created_at,
+                existing.path.as_posix(),
+            ):
+                latest_by_topic[key] = record
+        return [latest_by_topic[key] for key in sorted(latest_by_topic)]
 
     @staticmethod
     def _knowledge_matches(
@@ -654,6 +678,17 @@ class QAService:
 
         try:
             answer = self.provider.answer_question(question, tuple(context))
+        except ProviderNotConfiguredError as exc:
+            return QAResult(
+                question=question,
+                status="provider_not_configured",
+                evidence_level=evidence_level,
+                reason=str(exc),
+                retrieval=retrieval,
+                knowledge_topics=[match.record.knowledge.topic for match in knowledge_matches],
+                sources=sources,
+                evidence=evidence,
+            )
         except Exception as exc:
             raise QAProviderError("Provider could not answer from local evidence") from exc
         if not isinstance(answer, str) or not answer.strip():
