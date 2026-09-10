@@ -577,6 +577,30 @@ Acceptance:
 
 ---
 
+## TASK-022 — Session-only AI Provider Configuration UI
+
+Status: DONE
+Dependencies: TASK-016, TASK-021
+Owner: MAIN（密钥边界与验收）
+
+Acceptance record: 2026-09-10 MAIN added a sidebar configuration form for DeepSeek and OpenAI-compatible endpoints. Provider, model, endpoint and API Key can be applied directly from the UI; the API Key uses a password field and is retained only in the current Streamlit browser session. It is not written to `.env`, logs, data files or Git. MAIN verified the rendered controls on the local Streamlit page and full regression: 67 passed. No live API credential or external request was used during verification.
+
+Scope:
+
+- 在 UI 中填写 Provider、模型、API endpoint 与 API Key
+- 将配置仅用于当前浏览器会话的 Semantic Actions
+- 提供清除当前会话配置的入口
+
+Acceptance:
+
+- 用户无需编辑 `.env` 即可在 UI 中应用 API 配置
+- API Key 使用 password 输入框，且不出现在页面状态、日志、数据或 Git
+- 刷新或关闭会话后 Key 自动失效
+- 支持 DeepSeek 与 OpenAI-compatible chat-completions endpoint
+- 全量测试通过
+
+---
+
 # M7 — Cross-platform Hardening
 
 ## TASK-017 — Windows Core Smoke Test

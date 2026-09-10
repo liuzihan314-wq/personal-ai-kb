@@ -7,7 +7,7 @@ from pkb.index import IndexBuilder
 from pkb.knowledge import KnowledgeSource, KnowledgeStorage, TopicKnowledge
 from pkb.models import UnifiedDocument
 from pkb.notes import Note, NoteStorage
-from pkb.providers import MockAIProvider
+from pkb.providers import MockAIProvider, OpenAICompatibleProvider
 from pkb.storage import RawStorage
 from pkb.topics import TopicCandidate, TopicEvidence, TopicReason, TopicSource
 from pkb.ui import UIPaths, UIService, can_generate_script
@@ -128,6 +128,19 @@ def test_ui_paths_follow_the_project_data_contract(tmp_path):
     assert paths.notes_dir == tmp_path / "notes"
     assert paths.knowledge_dir == tmp_path / "knowledge"
     assert paths.index_path == tmp_path / "index" / "index.json"
+
+
+def test_ui_service_can_use_a_browser_session_provider_without_persisting_a_key(tmp_path):
+    service = UIService.with_session_provider(
+        UIPaths.from_data_dir(tmp_path),
+        provider_name="deepseek",
+        model="session-model",
+        base_url="https://api.example.test/v1",
+        api_key="session-only-key",
+    )
+
+    assert isinstance(service.provider, OpenAICompatibleProvider)
+    assert service.provider.model == "session-model"
 
 
 def test_pdf_import_runs_the_minimal_persisted_ui_slice(tmp_path):

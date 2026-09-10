@@ -6,6 +6,7 @@ from pkb.providers import (
     ProviderDocument,
     UnconfiguredProvider,
     configured_provider,
+    provider_from_values,
 )
 
 
@@ -77,3 +78,15 @@ def test_provider_selection_never_falls_back_to_mock_when_configuration_is_absen
     provider = configured_provider(configured)
     assert isinstance(provider, OpenAICompatibleProvider)
     assert provider.model == "deepseek-test"
+
+
+def test_session_provider_values_create_a_real_provider_without_settings_file():
+    provider = provider_from_values(
+        "openai-compatible",
+        "custom-model",
+        "https://api.example.test/v1",
+        "session-only-key",
+    )
+
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.model == "custom-model"

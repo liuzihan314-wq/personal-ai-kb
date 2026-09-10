@@ -4,6 +4,7 @@ from pkb.providers.configured import (
     ProviderNotConfiguredError,
     UnconfiguredProvider,
     configured_provider,
+    provider_from_values,
 )
 from pkb.providers.mock import MockAIProvider
 from pkb.providers.openai_compatible import OpenAICompatibleProvider, ProviderRequestError
@@ -27,4 +28,5 @@ __all__ = [
     "TopicSuggestion",
     "UnconfiguredProvider",
     "configured_provider",
+    "provider_from_values",
 ]

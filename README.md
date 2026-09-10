@@ -21,6 +21,8 @@ uv run streamlit run src/pkb/ui/app.py
 
 页面不会再把测试用的 Mock 输出当作回答。未配置 Provider 时，问答会保留本地证据和来源，但会明确提示尚未生成语义回答。
 
+也可以直接在页面左侧的“AI Provider 配置”填写 Provider、模型、endpoint 与 API Key，再点击“应用到当前会话”。该密钥只保存在当前浏览器会话的内存中，不会写入 `.env`、日志或 Git；刷新或关闭页面后需重新填写。
+
 复制 `.env.example` 为本机 `.env`，填入自己的 DeepSeek API Key 后重启 Streamlit：
 
 ```dotenv

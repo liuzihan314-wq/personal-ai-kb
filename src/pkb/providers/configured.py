@@ -20,14 +20,17 @@ class ProviderNotConfiguredError(RuntimeError):
 class UnconfiguredProvider:
     """Make missing credentials explicit instead of returning Mock output."""
 
-    message = (
-        "未配置 AI Provider。请在 .env 中设置 PKB_AI_PROVIDER、PKB_AI_MODEL、"
-        "PKB_AI_BASE_URL 和 PKB_AI_API_KEY 后重启应用。"
+    default_message = (
+        "未配置 AI Provider。请在侧栏填写 Provider、模型、endpoint 和 API Key，"
+        "或在 .env 中设置 PKB_AI_PROVIDER、PKB_AI_MODEL、PKB_AI_BASE_URL 和 "
+        "PKB_AI_API_KEY。"
     )
 
-    @staticmethod
-    def _raise() -> None:
-        raise ProviderNotConfiguredError(UnconfiguredProvider.message)
+    def __init__(self, message: str | None = None) -> None:
+        self.message = message or self.default_message
+
+    def _raise(self) -> None:
+        raise ProviderNotConfiguredError(self.message)
 
     def summarize(self, document: DocumentInput) -> str:
         self._raise()
@@ -80,18 +83,37 @@ class UnconfiguredProvider:
         self._raise()
 
 
+def provider_from_values(
+    provider_name: str | None,
+    model: str | None,
+    base_url: str | None,
+    api_key: str | None,
+) -> AIProvider:
+    """Create a provider from ephemeral UI values or persisted settings."""
+
+    name = (provider_name or "").strip().casefold()
+    normalized_model = (model or "").strip()
+    normalized_base_url = (base_url or "").strip()
+    normalized_key = (api_key or "").strip()
+    if name not in {"deepseek", "openai-compatible"}:
+        return UnconfiguredProvider("只支持 DeepSeek 或 OpenAI-compatible Provider。")
+    if not normalized_model or not normalized_base_url or not normalized_key:
+        return UnconfiguredProvider()
+    return OpenAICompatibleProvider(
+        model=normalized_model,
+        base_url=normalized_base_url,
+        api_key=normalized_key,
+    )
+
+
 def configured_provider(settings: Settings | None = None) -> AIProvider:
     """Create the configured provider or an explicit unavailable provider."""
 
     configured = settings or get_settings()
-    name = (configured.ai_provider or "").strip().casefold()
     key = configured.ai_api_key.get_secret_value() if configured.ai_api_key else ""
-    if name not in {"deepseek", "openai-compatible"}:
-        return UnconfiguredProvider()
-    if not configured.ai_model or not configured.ai_base_url or not key:
-        return UnconfiguredProvider()
-    return OpenAICompatibleProvider(
-        model=configured.ai_model,
-        base_url=configured.ai_base_url,
-        api_key=key,
+    return provider_from_values(
+        configured.ai_provider,
+        configured.ai_model,
+        configured.ai_base_url,
+        key,
     )

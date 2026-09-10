@@ -16,7 +16,7 @@ from pkb.ingest import IdeaCardImporter, PDFImporter
 from pkb.knowledge import KnowledgeCompiler, KnowledgeRecord
 from pkb.models import UnifiedDocument
 from pkb.notes import NoteGenerationResult, NoteService
-from pkb.providers import AIProvider, configured_provider
+from pkb.providers import AIProvider, configured_provider, provider_from_values
 from pkb.qa import QAResult, QAService
 from pkb.retrieval import RetrievalResult, RetrievalService
 from pkb.scripts import ScriptResult, ScriptWriter
@@ -98,6 +98,23 @@ class UIService:
         # Core services keep MockAIProvider for deterministic unit tests.  The
         # user-facing UI must never present that fixture text as an AI answer.
         self.provider = provider if provider is not None else configured_provider()
+
+    @classmethod
+    def with_session_provider(
+        cls,
+        paths: UIPaths,
+        *,
+        provider_name: str,
+        model: str,
+        base_url: str,
+        api_key: str,
+    ) -> "UIService":
+        """Bind a browser-session Provider without persisting its API key."""
+
+        return cls(
+            paths,
+            provider=provider_from_values(provider_name, model, base_url, api_key),
+        )
 
     def _persist_ingest(self, document: UnifiedDocument) -> IngestResult:
         note = NoteService(

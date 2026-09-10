@@ -24,6 +24,7 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "script_result": None,
     "topic_widget_previous": None,
     "topic_selection_confirmed": False,
+    "provider_session": None,
 }
 
 
@@ -102,6 +103,65 @@ def _render_flow_overview() -> None:
     )
 
 
+def _provider_session_values() -> dict[str, str] | None:
+    """Return the current browser-only provider settings, if applied."""
+
+    values = st.session_state.get("provider_session")
+    if not isinstance(values, dict):
+        return None
+    required = ("provider_name", "model", "base_url", "api_key")
+    if not all(isinstance(values.get(key), str) for key in required):
+        return None
+    return {key: values[key] for key in required}
+
+
+def _render_provider_configuration() -> None:
+    """Render a session-only credential form without exposing the API key."""
+
+    current = _provider_session_values() or {}
+    with st.expander("AI Provider 配置", expanded=not bool(current)):
+        st.caption("仅保存在当前浏览器会话；刷新或关闭页面后需重新填写，不写入 .env。")
+        with st.form("provider_configuration_form"):
+            provider_label = st.selectbox(
+                "Provider",
+                ["DeepSeek", "OpenAI-compatible"],
+                index=0 if current.get("provider_name", "deepseek") == "deepseek" else 1,
+            )
+            model = st.text_input(
+                "模型",
+                value=current.get("model", "deepseek-v4-flash"),
+                placeholder="例如：deepseek-v4-flash",
+            )
+            base_url = st.text_input(
+                "API endpoint",
+                value=current.get("base_url", "https://api.deepseek.com"),
+                placeholder="https://api.deepseek.com",
+            )
+            api_key = st.text_input(
+                "API Key",
+                type="password",
+                value="",
+                placeholder="粘贴你的 API Key",
+            )
+            apply = st.form_submit_button("应用到当前会话", use_container_width=True)
+        if apply:
+            if not all(value.strip() for value in (model, base_url, api_key)):
+                st.warning("请填写模型、API endpoint 和 API Key。")
+            else:
+                st.session_state["provider_session"] = {
+                    "provider_name": "deepseek"
+                    if provider_label == "DeepSeek"
+                    else "openai-compatible",
+                    "model": model.strip(),
+                    "base_url": base_url.strip(),
+                    "api_key": api_key.strip(),
+                }
+                st.success("已应用到当前会话。API Key 不会写入本地文件。")
+        if current and st.button("清除当前会话配置", key="clear_provider_session"):
+            st.session_state["provider_session"] = None
+            st.rerun()
+
+
 def _render_sidebar(service: UIService) -> None:
     with st.sidebar:
         st.markdown(
@@ -127,6 +187,16 @@ def _render_sidebar(service: UIService) -> None:
         st.markdown('<div class="pkb-side-label">Storage</div>', unsafe_allow_html=True)
         st.caption(f"数据目录：{service.paths.data_dir}")
         st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
+        _render_provider_configuration()
+
+
+def _service_for_current_session(default_service: UIService) -> UIService:
+    """Overlay browser-only credentials onto the default service binding."""
+
+    values = _provider_session_values()
+    if values is None:
+        return default_service
+    return UIService.with_session_provider(default_service.paths, **values)
 
 
 def _render_section_header(
@@ -604,9 +674,10 @@ def main(service: UIService | None = None) -> None:
     )
     _init_state()
     _render_theme()
-    active_service = service or UIService()
+    default_service = service or UIService()
 
-    _render_sidebar(active_service)
+    _render_sidebar(default_service)
+    active_service = default_service if service is not None else _service_for_current_session(default_service)
     _render_brand_header()
     _render_flow_overview()
 
