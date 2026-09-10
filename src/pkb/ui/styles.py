@@ -243,22 +243,20 @@ main .block-container {
     color: #241d34;
 }
 
-button[data-testid="stExpandSidebarButton"] {
-    width: 2.8rem;
-    height: 2.8rem;
-    border: 1px solid #bfb1e7;
+header[data-testid="stHeader"] button {
+    min-width: 2.8rem;
+    min-height: 2.8rem;
+    border: 2px solid #6d4ee8 !important;
     border-radius: 0.85rem;
-    background: #292530 !important;
-    outline: 3px solid #fffdf9;
-    outline-offset: 3px;
-    box-shadow: 0 0.35rem 0.9rem rgba(41, 37, 48, 0.18);
-    color: #fffdf9;
+    background: #6d4ee8 !important;
+    box-shadow: 0 0.35rem 0.9rem rgba(75, 48, 163, 0.28);
+    color: #fffdf9 !important;
 }
 
-button[data-testid="stExpandSidebarButton"] span,
-button[data-testid="stExpandSidebarButton"] svg {
-    color: #fffdf9;
-    fill: currentColor;
+header[data-testid="stHeader"] button span,
+header[data-testid="stHeader"] button svg {
+    color: #fffdf9 !important;
+    fill: currentColor !important;
 }
 
 .pkb-side-flow:nth-child(4) span { background: var(--pkb-purple); }
