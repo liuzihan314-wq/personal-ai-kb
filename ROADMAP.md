@@ -607,7 +607,7 @@ Status: DONE
 Dependencies: TASK-020, TASK-022
 Owner: MAIN（小范围 UI 修复与验收）
 
-Acceptance record: 2026-09-10 MAIN raised the contrast of muted page text and sidebar labels, strengthened the sidebar status card, input and button states, and replaced the ambiguous sidebar star with a high-contrast PKB brand mark. Main-flow behavior is unchanged. MAIN verified the rendered local desktop page and UI regression tests; no data, provider settings or credentials were changed.
+Acceptance record: 2026-09-10 MAIN raised the contrast of muted page text and sidebar labels, strengthened the sidebar status card, input and button states, and replaced the ambiguous sidebar star with a high-contrast PKB brand mark. A follow-up screenshot exposed that Streamlit's global light form card was still overriding the Provider section while its labels remained light. MAIN added sidebar-specific form, label, submit-button, expander, and collapsed-sidebar-button selectors, then reloaded the local desktop page and ran the full regression suite (67 passed). Main-flow behavior is unchanged; no data, provider settings or credentials were changed.
 
 Scope:
 

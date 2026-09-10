@@ -170,13 +170,28 @@ main .block-container {
 [data-testid="stSidebar"] [data-testid="stExpander"] {
     border: 1px solid rgba(255, 255, 255, 0.24);
     border-radius: 0.9rem;
-    background: rgba(255, 255, 255, 0.09);
+    background: #302a3e;
 }
 
 [data-testid="stSidebar"] [data-testid="stExpander"] summary,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary p {
     color: #fffdf9;
     font-weight: 800;
+}
+
+[data-testid="stSidebar"] div[data-testid="stForm"] {
+    margin-top: 0.25rem;
+    padding: 0.85rem 0.9rem 0.25rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+[data-testid="stSidebar"] div[data-testid="stForm"] label,
+[data-testid="stSidebar"] div[data-testid="stForm"] [data-testid="stWidgetLabel"] {
+    color: #fffdf9;
+    font-weight: 750;
 }
 
 [data-testid="stSidebar"] div[data-testid="stTextInput"] input,
@@ -191,7 +206,9 @@ main .block-container {
 }
 
 [data-testid="stSidebar"] div[data-testid="stFormSubmitButton"] button,
-[data-testid="stSidebar"] div.stButton > button {
+[data-testid="stSidebar"] div.stButton > button,
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondaryFormSubmit"],
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] {
     border: 1px solid #d9d0e4;
     background: #fffdf9;
     color: #292530;
@@ -199,7 +216,9 @@ main .block-container {
 }
 
 [data-testid="stSidebar"] div[data-testid="stFormSubmitButton"] button:hover,
-[data-testid="stSidebar"] div.stButton > button:hover {
+[data-testid="stSidebar"] div.stButton > button:hover,
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondaryFormSubmit"]:hover,
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover {
     border-color: #c7b8ff;
     background: #e5dfff;
     color: #241d34;
@@ -210,6 +229,28 @@ main .block-container {
     border-color: #c7b8ff;
     background: #c7b8ff;
     color: #241d34;
+}
+
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondaryFormSubmit"] {
+    border-color: #c7b8ff;
+    background: #c7b8ff;
+    color: #241d34;
+}
+
+button[data-testid="stExpandSidebarButton"] {
+    width: 2.8rem;
+    height: 2.8rem;
+    border: 1px solid #bfb1e7;
+    border-radius: 0.85rem;
+    background: #292530;
+    box-shadow: 0 0.35rem 0.9rem rgba(41, 37, 48, 0.18);
+    color: #fffdf9;
+}
+
+button[data-testid="stExpandSidebarButton"] span,
+button[data-testid="stExpandSidebarButton"] svg {
+    color: #fffdf9;
+    fill: currentColor;
 }
 
 .pkb-side-flow:nth-child(4) span { background: var(--pkb-purple); }
