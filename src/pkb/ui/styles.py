@@ -8,7 +8,7 @@ THEME_CSS = """
     --pkb-surface: #fffdf9;
     --pkb-surface-soft: #f2eee8;
     --pkb-ink: #292530;
-    --pkb-muted: #77727d;
+    --pkb-muted: #625d68;
     --pkb-line: #e8e2da;
     --pkb-dark: #25212d;
     --pkb-purple: #c7b8ff;
@@ -45,7 +45,7 @@ main .block-container {
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
 [data-testid="stSidebar"] .stCaptionContainer,
 [data-testid="stSidebar"] label {
-    color: #f6f1ec;
+    color: #fffdf9;
 }
 
 [data-testid="stSidebar"] hr {
@@ -63,20 +63,24 @@ main .block-container {
 
 .pkb-sidebar-brand .pkb-mark {
     display: inline-grid;
-    width: 2rem;
-    height: 2rem;
-    margin-right: 0.5rem;
+    width: 2.55rem;
+    height: 2.55rem;
+    margin-right: 0.62rem;
     place-items: center;
-    border-radius: 0.75rem;
-    background: var(--pkb-purple);
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    border-radius: 0.88rem;
+    background: linear-gradient(145deg, #d9d0ff, #ad97ff 62%, #f3d68e);
+    box-shadow: 0 0.55rem 1.15rem rgba(0, 0, 0, 0.24);
     color: var(--pkb-dark);
-    font-weight: 800;
+    font-size: 0.63rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
 }
 
 .pkb-sidebar-brand .pkb-brand-name {
     color: #fffdf9;
-    font-size: 1rem;
-    font-weight: 750;
+    font-size: 1.08rem;
+    font-weight: 850;
     letter-spacing: -0.02em;
     vertical-align: middle;
 }
@@ -93,12 +97,12 @@ main .block-container {
 
 .pkb-sidebar-eyebrow {
     margin: 0.8rem 0 0.35rem;
-    color: #afa6bd;
+    color: #d9d2e4;
 }
 
 .pkb-sidebar-copy {
     margin: 0;
-    color: #c4bccb;
+    color: #e1dbe8;
     font-size: 0.82rem;
     line-height: 1.55;
 }
@@ -106,9 +110,9 @@ main .block-container {
 .pkb-side-status {
     margin: 1.35rem 0 1.5rem;
     padding: 0.9rem 0.95rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .pkb-side-status .pkb-status-dot {
@@ -128,14 +132,14 @@ main .block-container {
 
 .pkb-side-status p {
     margin: 0.48rem 0 0;
-    color: #c4bccb;
+    color: #e1dbe8;
     font-size: 0.75rem;
     line-height: 1.45;
 }
 
 .pkb-side-label {
     margin: 0.8rem 0 0.4rem;
-    color: #afa6bd;
+    color: #d9d2e4;
     font-size: 0.67rem;
     font-weight: 800;
     letter-spacing: 0.13em;
@@ -147,19 +151,65 @@ main .block-container {
     gap: 0.55rem;
     align-items: center;
     padding: 0.46rem 0;
-    color: #e8e1ec;
-    font-size: 0.82rem;
+    color: #fffdf9;
+    font-size: 0.86rem;
+    font-weight: 650;
 }
 
 .pkb-side-flow span {
     display: inline-grid;
-    width: 1.45rem;
-    height: 1.45rem;
+    width: 1.55rem;
+    height: 1.55rem;
     place-items: center;
     border-radius: 0.5rem;
     color: var(--pkb-dark);
     font-size: 0.68rem;
     font-weight: 850;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 0.9rem;
+    background: rgba(255, 255, 255, 0.09);
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: #fffdf9;
+    font-weight: 800;
+}
+
+[data-testid="stSidebar"] div[data-testid="stTextInput"] input,
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    border-color: #d9d0e4;
+    background: #fffdf9;
+    color: #292530;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] * {
+    color: #292530;
+}
+
+[data-testid="stSidebar"] div[data-testid="stFormSubmitButton"] button,
+[data-testid="stSidebar"] div.stButton > button {
+    border: 1px solid #d9d0e4;
+    background: #fffdf9;
+    color: #292530;
+    font-weight: 850;
+}
+
+[data-testid="stSidebar"] div[data-testid="stFormSubmitButton"] button:hover,
+[data-testid="stSidebar"] div.stButton > button:hover {
+    border-color: #c7b8ff;
+    background: #e5dfff;
+    color: #241d34;
+}
+
+[data-testid="stSidebar"] div[data-testid="stFormSubmitButton"] button[kind="primary"],
+[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
+    border-color: #c7b8ff;
+    background: #c7b8ff;
+    color: #241d34;
 }
 
 .pkb-side-flow:nth-child(4) span { background: var(--pkb-purple); }

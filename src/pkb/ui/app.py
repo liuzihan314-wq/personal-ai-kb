@@ -167,7 +167,7 @@ def _render_sidebar(service: UIService) -> None:
         st.markdown(
             """
             <div class="pkb-sidebar-brand">
-                <span class="pkb-mark">✦</span><span class="pkb-brand-name">个人 AI 知识库</span>
+                <span class="pkb-mark" aria-label="Personal AI Knowledge Base">PKB</span><span class="pkb-brand-name">个人 AI 知识库</span>
                 <div class="pkb-sidebar-eyebrow">Your thinking, organized</div>
                 <p class="pkb-sidebar-copy">把每次阅读和思考，留成下一次创作可以复用的材料。</p>
             </div>

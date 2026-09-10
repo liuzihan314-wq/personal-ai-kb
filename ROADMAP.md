@@ -601,6 +601,28 @@ Acceptance:
 
 ---
 
+## TASK-023 — UI Contrast and Sidebar Brand Legibility
+
+Status: DONE
+Dependencies: TASK-020, TASK-022
+Owner: MAIN（小范围 UI 修复与验收）
+
+Acceptance record: 2026-09-10 MAIN raised the contrast of muted page text and sidebar labels, strengthened the sidebar status card, input and button states, and replaced the ambiguous sidebar star with a high-contrast PKB brand mark. Main-flow behavior is unchanged. MAIN verified the rendered local desktop page and UI regression tests; no data, provider settings or credentials were changed.
+
+Scope:
+
+- 修复文字、侧栏控制项与品牌标识的可读性
+- 保持现有布局、功能与 session-only API Key 边界
+
+Acceptance:
+
+- 常规文字与辅助文字在浅色页面上清晰可读
+- 侧栏输入框、按钮、展开配置区和流程项有明确前景/背景对比
+- 品牌标识可辨认，且不引入外部图片资源
+- UI 与全量回归测试通过
+
+---
+
 # M7 — Cross-platform Hardening
 
 ## TASK-017 — Windows Core Smoke Test
