@@ -170,7 +170,7 @@ main .block-container {
 [data-testid="stSidebar"] [data-testid="stExpander"] {
     border: 1px solid rgba(255, 255, 255, 0.24);
     border-radius: 0.9rem;
-    background: #302a3e;
+    background: #302a3e !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stExpander"] summary,
@@ -184,14 +184,20 @@ main .block-container {
     padding: 0.85rem 0.9rem 0.25rem;
     border: 0;
     border-radius: 0;
-    background: transparent;
-    box-shadow: none;
+    background: transparent !important;
+    box-shadow: none !important;
 }
 
 [data-testid="stSidebar"] div[data-testid="stForm"] label,
-[data-testid="stSidebar"] div[data-testid="stForm"] [data-testid="stWidgetLabel"] {
-    color: #fffdf9;
+[data-testid="stSidebar"] div[data-testid="stForm"] [data-testid="stWidgetLabel"],
+[data-testid="stSidebar"] div[data-testid="stForm"] [data-testid="stWidgetLabel"] * {
+    color: #fffdf9 !important;
     font-weight: 750;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"],
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] form {
+    background: #302a3e !important;
 }
 
 [data-testid="stSidebar"] div[data-testid="stTextInput"] input,
@@ -242,7 +248,9 @@ button[data-testid="stExpandSidebarButton"] {
     height: 2.8rem;
     border: 1px solid #bfb1e7;
     border-radius: 0.85rem;
-    background: #292530;
+    background: #292530 !important;
+    outline: 3px solid #fffdf9;
+    outline-offset: 3px;
     box-shadow: 0 0.35rem 0.9rem rgba(41, 37, 48, 0.18);
     color: #fffdf9;
 }

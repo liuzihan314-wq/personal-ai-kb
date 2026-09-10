@@ -119,12 +119,12 @@ def _render_provider_configuration() -> None:
     """Render a session-only credential form without exposing the API key."""
 
     current = _provider_session_values() or {}
-    with st.expander("AI Provider 配置", expanded=not bool(current)):
-        st.caption("仅保存在当前浏览器会话；刷新或关闭页面后需重新填写，不写入 .env。")
+    with st.expander("AI 服务设置", expanded=not bool(current)):
+        st.caption("仅在当前浏览器会话中临时保存；刷新或关闭页面后需重新填写。不会写入本地 .env 文件。")
         with st.form("provider_configuration_form"):
             provider_label = st.selectbox(
-                "Provider",
-                ["DeepSeek", "OpenAI-compatible"],
+                "服务商",
+                ["DeepSeek", "OpenAI 兼容服务"],
                 index=0 if current.get("provider_name", "deepseek") == "deepseek" else 1,
             )
             model = st.text_input(
@@ -133,12 +133,12 @@ def _render_provider_configuration() -> None:
                 placeholder="例如：deepseek-v4-flash",
             )
             base_url = st.text_input(
-                "API endpoint",
+                "接口地址",
                 value=current.get("base_url", "https://api.deepseek.com"),
                 placeholder="https://api.deepseek.com",
             )
             api_key = st.text_input(
-                "API Key",
+                "API 密钥",
                 type="password",
                 value="",
                 placeholder="粘贴你的 API Key",
@@ -146,17 +146,17 @@ def _render_provider_configuration() -> None:
             apply = st.form_submit_button("应用到当前会话", use_container_width=True)
         if apply:
             if not all(value.strip() for value in (model, base_url, api_key)):
-                st.warning("请填写模型、API endpoint 和 API Key。")
+                st.warning("请填写模型、接口地址和 API 密钥。")
             else:
                 st.session_state["provider_session"] = {
                     "provider_name": "deepseek"
                     if provider_label == "DeepSeek"
-                    else "openai-compatible",
+                else "openai-compatible",
                     "model": model.strip(),
                     "base_url": base_url.strip(),
                     "api_key": api_key.strip(),
                 }
-                st.success("已应用到当前会话。API Key 不会写入本地文件。")
+                st.success("已应用到当前会话。API 密钥不会写入本地文件。")
         if current and st.button("清除当前会话配置", key="clear_provider_session"):
             st.session_state["provider_session"] = None
             st.rerun()
