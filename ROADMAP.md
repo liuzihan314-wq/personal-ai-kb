@@ -623,6 +623,29 @@ Acceptance:
 
 ---
 
+## TASK-024 — Standalone Roadmap Dashboard
+
+Status: DONE
+Dependencies: TASK-016
+Owner: MAIN
+
+Acceptance record: 2026-09-11 MAIN added an independent local Streamlit dashboard that parses the canonical ROADMAP.md at render time. It shows completion progress, status filters, dependencies, owners and the existing acceptance/progress record for every task. The dashboard does not poll; it reflects a task only after MAIN has accepted it and updated ROADMAP.md, then the page is reloaded. The original knowledge-base page remains unchanged. MAIN verified the standalone light, high-contrast page at 127.0.0.1:8502 and ran the full regression suite (69 passed).
+
+Scope:
+
+- 独立显示 ROADMAP.md 的任务状态和说明
+- 不维护第二份任务状态
+- 不改动原知识库页面
+
+Acceptance:
+
+- 页面展示总任务、完成进度、可推进和受阻任务
+- 每项任务可查看依赖、负责人和最近记录
+- 仅在 ROADMAP.md 被 MAIN 更新后、页面重载时同步
+- 全量回归测试通过
+
+---
+
 # M7 — Cross-platform Hardening
 
 ## TASK-017 — Windows Core Smoke Test
