@@ -768,7 +768,20 @@ div.stButton > button:disabled {
 div[data-testid="stExpander"] {
     border: 1px solid var(--pkb-line);
     border-radius: 1rem;
-    background: #fffefa;
+    background: #fffefa !important;
+}
+
+div[data-testid="stExpander"] summary,
+div[data-testid="stExpander"] summary p,
+div[data-testid="stExpander"] summary span,
+div[data-testid="stExpander"] summary svg {
+    color: var(--pkb-ink) !important;
+    fill: currentColor !important;
+}
+
+.stCaptionContainer,
+[data-testid="stCaptionContainer"] {
+    color: var(--pkb-muted) !important;
 }
 
 div[data-testid="stExpander"] summary:hover {
