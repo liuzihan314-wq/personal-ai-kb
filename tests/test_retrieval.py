@@ -183,3 +183,24 @@ def test_search_cli_can_read_synthetic_index_and_report_no_hits(tmp_path):
     assert miss.exit_code == 0, miss.output
     assert "status: no_hits" in miss.output
     assert "candidates: 0" in miss.output
+
+
+def test_dense_related_links_do_not_overrule_direct_video_matches():
+    videos = [
+        _entry(f"video-{i}", f"AI 视频制作 {i}", keywords=["ai", "视频"])
+        for i in range(5)
+    ]
+    configuration = _entry(
+        "aaa-config", "AI 全局配置", tags=["AI"], keywords=["ai"],
+        related=[_link(video.document_id) for video in videos],
+    )
+    index = _index(configuration, *videos)
+    result = retrieve_from_index(index, "AI视频", limit=4)
+    assert len(result.candidates) == 4
+    assert all(c.document_id.startswith("video-") for c in result.candidates)
+    all_results = retrieve_from_index(index, "AI 视频")
+    config = next(c for c in all_results.candidates if c.document_id == "aaa-config")
+    assert config.score < min(c.score for c in result.candidates)
+    assert config.score < 1
+    assert len(config.evidence.related) == 5
+    assert abs(sum(r.score for r in config.reasons if r.field == "related") - 0.1) < 0.001

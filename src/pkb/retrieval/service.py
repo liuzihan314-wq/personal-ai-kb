@@ -175,6 +175,15 @@ def _related_matches(
         )
         contribution += related_score
 
+    # Related is one supporting field, not an unlimited bonus per link.
+    # Keep all evidence and scale its explanations to the same total budget.
+    if contribution > RELATED_WEIGHT:
+        scale = RELATED_WEIGHT / contribution
+        reasons = [
+            reason.model_copy(update={"score": round(reason.score * scale, 4)})
+            for reason in reasons
+        ]
+        contribution = RELATED_WEIGHT
     return related_ids, reasons, contribution
 
 
