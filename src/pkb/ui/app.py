@@ -27,10 +27,27 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "provider_session": None,
 }
 
+_INGEST_INVALIDATED_STATE = (
+    "search_result",
+    "qa_result",
+    "knowledge_result",
+    "topics_result",
+    "script_result",
+    "topic_widget_previous",
+)
+
 
 def _init_state() -> None:
     for key, value in _STATE_DEFAULTS.items():
         st.session_state.setdefault(key, value)
+
+
+def _invalidate_results_after_ingest(state: Any) -> None:
+    """Discard page results that were produced from the previous Index."""
+
+    for key in _INGEST_INVALIDATED_STATE:
+        state[key] = None
+    state["topic_selection_confirmed"] = False
 
 
 def _show_error(error: Exception) -> None:
@@ -344,7 +361,9 @@ def _render_import_tab(service: UIService) -> None:
                     except Exception as error:
                         st.error(f"{pdf_file.name}：{error}")
                 if imported:
-                    st.success(f"已导入 {imported} 个 PDF 文件。")
+                    _invalidate_results_after_ingest(st.session_state)
+                    st.session_state["ingest_notice"] = f"已导入 {imported} 个 PDF 文件。"
+                    st.rerun()
     with idea_column:
         _render_card_heading("CAPTURE / IDEA", "添加观点卡片", "把好句、灵感和自己的备注及时留下。")
         with st.form("idea_form", clear_on_submit=True):
@@ -368,6 +387,8 @@ def _render_import_tab(service: UIService) -> None:
             except Exception as error:
                 _show_error(error)
     if st.session_state["last_ingest"] is not None:
+        if notice := st.session_state.pop("ingest_notice", None):
+            st.success(notice)
         st.markdown(
             '<div class="pkb-card-kicker" style="margin:1.6rem 0 0.65rem;">Latest activity</div>',
             unsafe_allow_html=True,

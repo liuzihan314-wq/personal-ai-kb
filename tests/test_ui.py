@@ -158,6 +158,36 @@ def test_pdf_import_runs_the_minimal_persisted_ui_slice(tmp_path):
     assert UIService(UIPaths.from_data_dir(tmp_path)).search("AI").found
 
 
+def test_successful_ingest_invalidates_results_from_the_previous_index():
+    from pkb.ui.app import _invalidate_results_after_ingest
+
+    state = {
+        "search_result": object(),
+        "qa_result": object(),
+        "knowledge_result": object(),
+        "topics_result": object(),
+        "script_result": object(),
+        "topic_widget_previous": "旧选题",
+        "topic_selection_confirmed": True,
+        "provider_session": {"api_key": "session-only"},
+        "last_ingest": object(),
+    }
+
+    _invalidate_results_after_ingest(state)
+
+    assert all(state[key] is None for key in (
+        "search_result",
+        "qa_result",
+        "knowledge_result",
+        "topics_result",
+        "script_result",
+        "topic_widget_previous",
+    ))
+    assert state["topic_selection_confirmed"] is False
+    assert state["provider_session"] == {"api_key": "session-only"}
+    assert state["last_ingest"] is not None
+
+
 def test_idea_card_updates_note_and_index_without_reimplementing_storage(tmp_path):
     service = UIService(
         UIPaths.from_data_dir(tmp_path),
