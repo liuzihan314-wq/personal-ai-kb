@@ -698,6 +698,39 @@ Dependencies: TASK-017
 
 ---
 
+## TASK-025 — Hybrid Semantic Retrieval
+
+Status: IN_PROGRESS  
+Dependencies: TASK-008, TASK-010, TASK-020  
+Owner: MAIN + TASK-025 Worker  
+Suggested branch: `feat/hybrid-semantic-retrieval`
+
+Trigger: 2026-09-12 用户真实检索样本显示，仅关键词和 Related 规则无法召回“人物动作更自然”与“运动一致性 / 镜头连续性”等不同措辞的内容。
+
+Scope:
+
+- 在现有本地 JSON Index 上增加可替换的本地语义相似度层
+- 保留标题、标签、关键词、Topic 的可解释直接匹配
+- 定义各信号权重；Related 总贡献不得超过 0.10
+- 输出每个候选的语义分数与来源证据
+- 支持离线最小样本与真实 UI 检索验收
+
+Not in scope:
+
+- 云端向量数据库
+- 把 Raw / Notes / Knowledge 改造成 Chunk 主架构
+- 修改真实 API Key 或迁移已有用户数据
+
+Acceptance:
+
+- `AI视频` 仍优先召回视频文章
+- 同义但不同措辞的 AI 视频问题可命中语义相关文章
+- Related 链接数量不能主导排名
+- 结果仍可追溯到 Index / Note / Raw 来源
+- 自动测试、真实 UI 样本、git diff 均由 MAIN 验收
+
+---
+
 # 4. 推荐首轮并行策略
 
 TASK-002 完成后：
