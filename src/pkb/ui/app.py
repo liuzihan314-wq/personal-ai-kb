@@ -319,23 +319,32 @@ def _render_import_tab(service: UIService) -> None:
     with pdf_column:
         _render_card_heading("CAPTURE / PDF", "导入文本型 PDF", "适合保存文章、报告或课程材料。")
         with st.form("pdf_import_form", clear_on_submit=True):
-            uploaded = st.file_uploader("选择文本型 PDF", type=["pdf"])
+            uploaded = st.file_uploader(
+                "选择文本型 PDF",
+                type=["pdf"],
+                accept_multiple_files=True,
+            )
             submitted = st.form_submit_button(
                 "导入 PDF",
                 type="primary",
                 use_container_width=True,
             )
         if submitted:
-            if uploaded is None:
-                st.warning("请先选择一个 PDF 文件。")
+            if not uploaded:
+                st.warning("请先选择至少一个 PDF 文件。")
             else:
-                try:
-                    st.session_state["last_ingest"] = service.import_pdf(
-                        uploaded.name,
-                        uploaded.getvalue(),
-                    )
-                except Exception as error:
-                    _show_error(error)
+                imported = 0
+                for pdf_file in uploaded:
+                    try:
+                        st.session_state["last_ingest"] = service.import_pdf(
+                            pdf_file.name,
+                            pdf_file.getvalue(),
+                        )
+                        imported += 1
+                    except Exception as error:
+                        st.error(f"{pdf_file.name}：{error}")
+                if imported:
+                    st.success(f"已导入 {imported} 个 PDF 文件。")
     with idea_column:
         _render_card_heading("CAPTURE / IDEA", "添加观点卡片", "把好句、灵感和自己的备注及时留下。")
         with st.form("idea_form", clear_on_submit=True):
