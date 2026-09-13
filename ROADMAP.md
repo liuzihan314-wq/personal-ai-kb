@@ -700,10 +700,12 @@ Dependencies: TASK-017
 
 ## TASK-025 — Hybrid Semantic Retrieval
 
-Status: IN_PROGRESS  
+Status: DONE
 Dependencies: TASK-008, TASK-010, TASK-020  
 Owner: MAIN + TASK-025 Worker  
 Suggested branch: `feat/hybrid-semantic-retrieval`
+
+Acceptance record: 2026-09-13 MAIN reviewed the Worker branch and three repair rounds, then integrated the accepted commits into `main`. Retrieval now combines explainable title/tag/keyword/Topic signals with DashScope-compatible embedding cosine similarity while keeping total Related contribution at or below 0.10. The Streamlit UI exposes independent browser-session chat Provider and DashScope Embedding settings; disabling either does not clear the other, no key is written to `.env` or Git, and an explicitly disabled UI semantic client cannot fall back to environment credentials. MAIN verified the merged source and diff, fixed-vector semantic recall with different wording, request/response contract and source evidence, a complete Streamlit form-to-HTTP-to-ranked-result vertical slice against a local compatible endpoint, preserved PDF-import refresh behavior, and merged-main regression (79 passed). The remaining V1 limitation is that each semantic request re-embeds current Index metadata, which adds API latency, cost, and metadata egress; Raw, Notes, and Knowledge bodies are not sent.
 
 Trigger: 2026-09-12 用户真实检索样本显示，仅关键词和 Related 规则无法召回“人物动作更自然”与“运动一致性 / 镜头连续性”等不同措辞的内容。
 
