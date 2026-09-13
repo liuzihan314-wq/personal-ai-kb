@@ -25,6 +25,7 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "topic_widget_previous": None,
     "topic_selection_confirmed": False,
     "provider_session": None,
+    "embedding_session": None,
 }
 
 _INGEST_INVALIDATED_STATE = (
@@ -129,17 +130,13 @@ def _provider_session_values() -> dict[str, str] | None:
     required = ("provider_name", "model", "base_url", "api_key")
     if not all(isinstance(values.get(key), str) for key in required):
         return None
-    result = {key: values[key] for key in required}
-    for key in ("embedding_model", "embedding_base_url", "embedding_api_key"):
-        if isinstance(values.get(key), str):
-            result[key] = values[key]
-    return result
+    return {key: values[key] for key in required}
 
 
 def _embedding_session_values() -> dict[str, str] | None:
     """Return independent browser-only Embedding settings, if applied."""
 
-    values = st.session_state.get("provider_session")
+    values = st.session_state.get("embedding_session")
     if not isinstance(values, dict):
         return None
     required = ("embedding_model", "embedding_base_url", "embedding_api_key")
@@ -152,7 +149,6 @@ def _render_provider_configuration() -> None:
     """Render a session-only credential form without exposing the API key."""
 
     current = _provider_session_values() or {}
-    embedding = _embedding_session_values() or {}
     with st.expander("AI 服务设置", expanded=not bool(current)):
         st.caption("仅在当前浏览器会话中临时保存；刷新或关闭页面后需重新填写。不会写入本地 .env 文件。")
         with st.form("provider_configuration_form"):
@@ -191,7 +187,6 @@ def _render_provider_configuration() -> None:
                     "base_url": base_url.strip(),
                     "api_key": provider_key,
                 }
-                session_values.update(embedding)
                 st.session_state["provider_session"] = session_values
                 st.success("已应用到当前会话。API 密钥不会写入本地文件。")
         if current and st.button("清除当前会话配置", key="clear_provider_session"):
@@ -203,9 +198,6 @@ def _render_embedding_configuration() -> None:
     """Render an independent, browser-session-only Embedding form."""
 
     current = _embedding_session_values() or {}
-    session_values = st.session_state.get("provider_session")
-    if not isinstance(session_values, dict):
-        session_values = {}
     embedding_keys = ("embedding_model", "embedding_base_url", "embedding_api_key")
     enabled = all(current.get(key, "").strip() for key in embedding_keys)
     with st.expander("语义检索 / DashScope Embedding", expanded=not enabled):
@@ -235,31 +227,19 @@ def _render_embedding_configuration() -> None:
             key = api_key.strip() or current.get("embedding_api_key", "")
             values = (model.strip(), base_url.strip(), key)
             if not any(values):
-                remaining = {
-                    key: value
-                    for key, value in session_values.items()
-                    if not key.startswith("embedding_")
-                }
-                st.session_state["provider_session"] = remaining or None
+                st.session_state["embedding_session"] = None
                 st.info("当前为仅直接检索。")
             elif not all(values):
                 st.warning("请同时填写 Embedding 模型、Base URL 和 API Key。")
             else:
-                updated = dict(session_values)
-                updated.update(
-                    embedding_model=values[0],
-                    embedding_base_url=values[1],
-                    embedding_api_key=values[2],
-                )
-                st.session_state["provider_session"] = updated
+                st.session_state["embedding_session"] = {
+                    "embedding_model": values[0],
+                    "embedding_base_url": values[1],
+                    "embedding_api_key": values[2],
+                }
                 st.success("已启用 DashScope 语义检索，仅在当前会话生效。")
         if enabled and st.button("关闭语义检索", key="clear_embedding_session"):
-            remaining = {
-                key: value
-                for key, value in session_values.items()
-                if not key.startswith("embedding_")
-            }
-            st.session_state["provider_session"] = remaining or None
+            st.session_state["embedding_session"] = None
             st.rerun()
 
 
@@ -292,11 +272,14 @@ def _render_sidebar(service: UIService) -> None:
         _render_embedding_configuration()
 
 
-def _service_for_current_session(default_service: UIService) -> UIService:
-    """Overlay browser-only credentials onto the default service binding."""
+def _service_for_session_values(
+    default_service: UIService,
+    provider: dict[str, str] | None,
+    embedding: dict[str, str] | None,
+) -> UIService:
+    """Compose independent browser-session bindings over the default service."""
 
-    values = _provider_session_values()
-    embedding = _embedding_session_values()
+    values = provider
     if values is not None:
         return UIService.with_session_provider(
             default_service.paths,
@@ -313,6 +296,16 @@ def _service_for_current_session(default_service: UIService) -> UIService:
             **embedding,
         )
     return default_service
+
+
+def _service_for_current_session(default_service: UIService) -> UIService:
+    """Overlay browser-only credentials onto the default service binding."""
+
+    return _service_for_session_values(
+        default_service,
+        _provider_session_values(),
+        _embedding_session_values(),
+    )
 
 
 def _render_section_header(

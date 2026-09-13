@@ -157,6 +157,42 @@ def test_ui_can_enable_embedding_without_replacing_chat_provider(tmp_path):
     assert isinstance(service.embedding_client, DashScopeEmbeddingClient)
 
 
+def test_ui_session_bindings_cover_all_combinations_and_clear_independently(tmp_path):
+    from pkb.ui.app import _service_for_session_values
+
+    default = UIService(UIPaths.from_data_dir(tmp_path), provider=MockAIProvider())
+    provider_values = {
+        "provider_name": "deepseek",
+        "model": "session-model",
+        "base_url": "https://api.example.test/v1",
+        "api_key": "session-only-key",
+    }
+    embedding_values = {
+        "embedding_model": "qwen3.7-text-embedding-flash",
+        "embedding_base_url": "https://workspace.example.test/compatible-mode/v1",
+        "embedding_api_key": "embedding-session-key",
+    }
+
+    assert _service_for_session_values(default, None, None) is default
+    provider_only = _service_for_session_values(default, provider_values, None)
+    assert provider_only.embedding_client is None
+    embedding_only = _service_for_session_values(default, None, embedding_values)
+    assert embedding_only.provider is default.provider
+    assert embedding_only.embedding_client is not None
+    both = _service_for_session_values(default, provider_values, embedding_values)
+    assert both.embedding_client is not None
+    assert both.provider.model == "session-model"
+
+    state = {
+        "provider_session": provider_values,
+        "embedding_session": embedding_values,
+    }
+    state["provider_session"] = None
+    assert state["embedding_session"] == embedding_values
+    state["embedding_session"] = None
+    assert state["provider_session"] is None
+
+
 def test_ui_session_embedding_configuration_is_passed_to_search_and_qa(
     tmp_path,
     monkeypatch,
