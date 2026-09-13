@@ -129,7 +129,11 @@ def _provider_session_values() -> dict[str, str] | None:
     required = ("provider_name", "model", "base_url", "api_key")
     if not all(isinstance(values.get(key), str) for key in required):
         return None
-    return {key: values[key] for key in required}
+    result = {key: values[key] for key in required}
+    for key in ("embedding_model", "embedding_base_url", "embedding_api_key"):
+        if isinstance(values.get(key), str):
+            result[key] = values[key]
+    return result
 
 
 def _render_provider_configuration() -> None:
@@ -160,10 +164,37 @@ def _render_provider_configuration() -> None:
                 value="",
                 placeholder="粘贴你的 API Key",
             )
+            st.markdown("**语义检索 / DashScope Embedding（可选）**")
+            st.caption("未配置时只使用标题、标签、关键词和 Topic 的直接检索；配置后才启用语义向量召回。")
+            embedding_model = st.text_input(
+                "Embedding 模型",
+                value=current.get("embedding_model", "qwen3.7-text-embedding-flash"),
+                placeholder="qwen3.7-text-embedding-flash",
+            )
+            embedding_base_url = st.text_input(
+                "Embedding Base URL",
+                value=current.get("embedding_base_url", ""),
+                placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            )
+            embedding_api_key = st.text_input(
+                "Embedding API Key",
+                type="password",
+                value="",
+                placeholder="粘贴 Embedding API Key",
+            )
             apply = st.form_submit_button("应用到当前会话", use_container_width=True)
         if apply:
-            if not all(value.strip() for value in (model, base_url, api_key)):
+            provider_key = api_key.strip() or current.get("api_key", "")
+            embedding_key = embedding_api_key.strip() or current.get("embedding_api_key", "")
+            embedding_values = (
+                embedding_model.strip(),
+                embedding_base_url.strip(),
+                embedding_key,
+            )
+            if not all(value.strip() for value in (model, base_url, provider_key)):
                 st.warning("请填写模型、接口地址和 API 密钥。")
+            elif any(embedding_values) and not all(embedding_values):
+                st.warning("语义检索配置需要同时填写 Embedding 模型、Base URL 和 API Key。")
             else:
                 st.session_state["provider_session"] = {
                     "provider_name": "deepseek"
@@ -171,7 +202,10 @@ def _render_provider_configuration() -> None:
                 else "openai-compatible",
                     "model": model.strip(),
                     "base_url": base_url.strip(),
-                    "api_key": api_key.strip(),
+                    "api_key": provider_key,
+                    "embedding_model": embedding_values[0],
+                    "embedding_base_url": embedding_values[1],
+                    "embedding_api_key": embedding_values[2],
                 }
                 st.success("已应用到当前会话。API 密钥不会写入本地文件。")
         if current and st.button("清除当前会话配置", key="clear_provider_session"):

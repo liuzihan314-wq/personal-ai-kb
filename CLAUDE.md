@@ -15,6 +15,7 @@
 - 后台 subagent 仅用于短时调查、资料搜索、报错分析或第二意见；需要写代码、多轮修改、返工、验收或独立 branch/worktree 的任务不使用后台 subagent。
 - Worker 只读取完成当前 TASK 所需内容，只改 Task Brief 允许的文件，测试后报告 `READY_FOR_REVIEW` 或 `BLOCKED`。不得修改 ROADMAP、新增任务、扩张范围、无关重构、合并或自行进入下一 TASK。
 - Worker 完成报告必须包含 TASK、STATUS、完成内容、修改文件、测试与结果、未解决问题、风险、Branch、Worktree、Commit 与验收步骤。MAIN 收到报告后自行核对 Task Brief、修改范围、git diff、测试、架构/接口约束、禁止项和 Acceptance Criteria；PASS 后直接完成正常提交、合并、ROADMAP 更新和依赖解锁，FAIL 后直接回到同一 Worker 返工。普通验收流程不逐步向用户申请批准。
+- Worker 进入可验收状态前，必须将实现提交到对应任务分支，并确认 branch 指针指向最新实现。未提交改动只能作为 BLOCKED 或返工上下文报告；MAIN 不得把仅存在于独立 worktree 的未提交改动视为可验收完成态。
 - MAIN 持续推进所有依赖满足、范围清晰且互不冲突的后续任务。只有需求或架构存在关键歧义、明显超出范围、高风险或不可逆操作、新增外部账号/权限/付费、需要数据迁移、连续失败须改变技术路线，或存在重要业务方案待决定时，才暂停请求用户决定。
 - MAIN 必须维护 Active Task ledger（Task ID、正式 Thread ID 或 clientThreadId、branch、worktree、验收状态）。Worker Completion Report 是首选信号，但不是唯一信号：每次收到项目工作、每次调度检查或自动心跳时，MAIN 都要核对可见 Task 状态及每个 Active worktree 的 `git status` / branch log。发现未报告的完成性变更时，MAIN 直接进入验收，不能把“没有正式 Thread ID”误判为“没有任务结果”。
 

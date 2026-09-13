@@ -5,7 +5,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-RetrievalField = Literal["title", "tags", "keywords", "topic", "related"]
+RetrievalField = Literal[
+    "title",
+    "tags",
+    "keywords",
+    "topic",
+    "semantic",
+    "related",
+]
 RetrievalStatus = Literal["ok", "no_hits"]
 
 
@@ -18,6 +25,7 @@ class RetrievalEvidence(BaseModel):
     tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     topic: list[str] = Field(default_factory=list)
+    semantic: list[str] = Field(default_factory=list)
     related: list[str] = Field(default_factory=list)
 
     @property
@@ -26,7 +34,7 @@ class RetrievalEvidence(BaseModel):
 
         return tuple(
             field
-            for field in ("title", "tags", "keywords", "topic", "related")
+            for field in ("title", "tags", "keywords", "topic", "semantic", "related")
             if getattr(self, field)
         )
 

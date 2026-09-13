@@ -10,12 +10,32 @@ from pkb.index import (
 )
 from pkb.retrieval import (
     CandidateJudgmentRequest,
+    DashScopeEmbeddingClient,
+    FIELD_WEIGHTS,
     RetrievalService,
+    RELATED_WEIGHT,
+    SEMANTIC_METHOD,
+    SEMANTIC_WEIGHT,
     retrieve_from_index,
 )
 
 
 runner = CliRunner()
+
+
+class _FakeEmbeddingClient:
+    model = "fake-embedding-for-tests"
+
+    def embed(self, texts):
+        vectors = []
+        for text in texts:
+            if text.startswith("title: 运动一致性"):
+                vectors.append((1.0, 0.0))
+            elif text.startswith("title: 咖啡烘焙"):
+                vectors.append((0.0, 1.0))
+            else:
+                vectors.append((1.0, 0.0))
+        return vectors
 
 
 def _entry(
@@ -204,3 +224,93 @@ def test_dense_related_links_do_not_overrule_direct_video_matches():
     assert config.score < 1
     assert len(config.evidence.related) == 5
     assert abs(sum(r.score for r in config.reasons if r.field == "related") - 0.1) < 0.001
+
+
+def test_hybrid_weight_boundaries_are_explicit_and_bounded():
+    assert FIELD_WEIGHTS == {
+        "title": 0.30,
+        "tags": 0.20,
+        "keywords": 0.15,
+        "topic": 0.10,
+    }
+    assert sum(FIELD_WEIGHTS.values()) + SEMANTIC_WEIGHT + RELATED_WEIGHT == 1.0
+    assert RELATED_WEIGHT <= 0.10
+
+
+def test_ai_video_keyword_match_stays_a_direct_search_signal():
+    keyword_hit = _entry(
+        "keyword-video",
+        "动作控制方法",
+        keywords=["AI视频生成"],
+    )
+    tag_hit = _entry("tag-ai", "工具整理", tags=["AI"])
+    result = retrieve_from_index(_index(keyword_hit, tag_hit), "AI视频")
+
+    assert result.status == "ok"
+    assert result.candidates[0].document_id == "keyword-video"
+    assert "keywords" in result.candidates[0].evidence.matched_fields
+    assert any(reason.field == "keywords" for reason in result.candidates[0].reasons)
+
+
+def test_semantic_similarity_surfaces_different_motion_wording_without_mapping():
+    motion = _entry(
+        "motion-consistency",
+        "运动一致性",
+        keywords=["镜头连续性"],
+    )
+    unrelated = _entry(
+        "coffee",
+        "咖啡烘焙",
+        keywords=["手冲"],
+    )
+    result = retrieve_from_index(
+        _index(motion, unrelated),
+        "怎么让 AI 生成的视频人物动作更自然",
+        embedding_client=_FakeEmbeddingClient(),
+    )
+
+    assert result.status == "ok"
+    candidate = result.candidates[0]
+    assert candidate.document_id == "motion-consistency"
+    semantic_reason = next(
+        reason for reason in candidate.reasons if reason.field == "semantic"
+    )
+    assert semantic_reason.score > 0
+    assert SEMANTIC_METHOD in semantic_reason.explanation
+    assert "model=fake-embedding-for-tests" in semantic_reason.explanation
+    assert "dimension=2" in semantic_reason.explanation
+    assert candidate.evidence.semantic
+    assert result == retrieve_from_index(
+        _index(motion, unrelated),
+        "怎么让 AI 生成的视频人物动作更自然",
+        embedding_client=_FakeEmbeddingClient(),
+    )
+
+
+def test_embedding_client_uses_dashscope_openai_compatible_request_shape():
+    calls = []
+
+    def transport(url, headers, body):
+        calls.append((url, headers, body))
+        return {
+            "data": [
+                {"index": 1, "embedding": [0.0, 1.0]},
+                {"index": 0, "embedding": [1.0, 0.0]},
+            ],
+        }
+
+    client = DashScopeEmbeddingClient(
+        model="qwen3.7-text-embedding-flash",
+        base_url="https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        api_key="unit-test-key",
+        transport=transport,
+    )
+
+    assert client.embed(["first", "second"]) == [(1.0, 0.0), (0.0, 1.0)]
+    url, headers, body = calls[0]
+    assert url.endswith("/compatible-mode/v1/embeddings")
+    assert headers["Authorization"].startswith("Bearer ")
+    assert body == {
+        "model": "qwen3.7-text-embedding-flash",
+        "input": ["first", "second"],
+    }

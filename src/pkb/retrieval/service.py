@@ -1,8 +1,8 @@
-"""Deterministic retrieval over the persisted local JSON Index.
+"""Explainable hybrid retrieval over the persisted local JSON Index.
 
-The service deliberately reads only the validated Index.  It does not read
-Raw or Note contents, call an AI Provider, create relationships, or use a
-vector store.  Those boundaries keep V1 retrieval local and auditable.
+The service reads only validated Index metadata. Direct metadata matches,
+optional embedding similarity, and bounded Related support keep retrieval
+traceable without introducing a vector database.
 """
 
 from collections.abc import Mapping, Sequence
@@ -20,17 +20,25 @@ from pkb.retrieval.model import (
     RetrievalReason,
     RetrievalResult,
 )
+from pkb.retrieval.semantic import (
+    SEMANTIC_METHOD,
+    DashScopeEmbeddingClient,
+    EmbeddingClient,
+    EmbeddingSemanticIndex,
+)
 
 
 FIELD_WEIGHTS: Mapping[RetrievalField, float] = {
-    "title": 0.45,
-    "tags": 0.25,
-    "keywords": 0.18,
-    "topic": 0.12,
+    "title": 0.30,
+    "tags": 0.20,
+    "keywords": 0.15,
+    "topic": 0.10,
 }
+SEMANTIC_WEIGHT = 0.15
 RELATED_WEIGHT = 0.10
+SEMANTIC_MIN_SIMILARITY = 0.08
 _DIRECT_FIELDS: tuple[RetrievalField, ...] = ("title", "tags", "keywords", "topic")
-_ALL_FIELDS: tuple[RetrievalField, ...] = (*_DIRECT_FIELDS, "related")
+_ALL_FIELDS: tuple[RetrievalField, ...] = (*_DIRECT_FIELDS, "semantic", "related")
 
 
 @dataclass(frozen=True)
@@ -131,8 +139,9 @@ def _related_matches(
     entry: IndexEntry,
     query: ParsedQuery,
     entries_by_id: Mapping[str, IndexEntry],
+    semantic_index: EmbeddingSemanticIndex | None,
 ) -> tuple[list[str], list[RetrievalReason], float]:
-    """Score only existing links whose target itself matches the query."""
+    """Score existing links whose target matches directly or semantically."""
 
     related_ids: list[str] = []
     reasons: list[RetrievalReason] = []
@@ -144,7 +153,15 @@ def _related_matches(
             # relationship; the persisted Index remains the source of truth.
             continue
         target_matches = _direct_matches(target, query)
-        if not target_matches:
+        target_semantic = (
+            semantic_index.match(query.raw, target)
+            if semantic_index is not None
+            else None
+        )
+        if not target_matches and (
+            target_semantic is None
+            or target_semantic.similarity < SEMANTIC_MIN_SIMILARITY
+        ):
             continue
 
         target_terms = [
@@ -152,7 +169,11 @@ def _related_matches(
             for field in _DIRECT_FIELDS
             for term in target_matches.get(field, _FieldMatch((), ())).terms
         ]
-        coverage = _coverage(target_terms, query)
+        direct_coverage = _coverage(target_terms, query)
+        coverage = max(
+            direct_coverage,
+            target_semantic.similarity if target_semantic is not None else 0.0,
+        )
         link_factor = 0.5 + (0.5 * link.score)
         related_score = RELATED_WEIGHT * coverage * link_factor
         related_ids.append(link.document_id)
@@ -161,14 +182,28 @@ def _related_matches(
             for field in _DIRECT_FIELDS
             for value in target_matches.get(field, _FieldMatch((), ())).values
         ]
+        if not target_values:
+            target_values = [
+                f"semantic features: {', '.join(target_semantic.features)}"
+            ]
+        target_explanation = (
+            f"target matched {', '.join(target_values)}"
+            if target_matches
+            else (
+                f"target semantic similarity {target_semantic.similarity:.4f}; "
+                f"model={target_semantic.model}; "
+                f"dimension={target_semantic.dimension}; "
+                f"represented fields: {', '.join(target_semantic.features)}"
+            )
+        )
         reasons.append(
             RetrievalReason(
                 field="related",
                 matches=[link.document_id, *target_values],
-                score=round(related_score, 4),
+                score=related_score,
                 explanation=(
                     f"existing related link to {link.document_id!r}; "
-                    f"target matched {', '.join(target_values)}; "
+                    f"{target_explanation}; "
                     f"link reason: {link.reason}"
                 ),
             ),
@@ -177,13 +212,26 @@ def _related_matches(
 
     # Related is one supporting field, not an unlimited bonus per link.
     # Keep all evidence and scale its explanations to the same total budget.
-    if contribution > RELATED_WEIGHT:
-        scale = RELATED_WEIGHT / contribution
+    if contribution:
+        scale = min(1.0, RELATED_WEIGHT / contribution)
+        bounded_scores = [round(reason.score * scale, 8) for reason in reasons]
+        if sum(bounded_scores) > RELATED_WEIGHT:
+            for index in range(len(bounded_scores) - 1, -1, -1):
+                other_total = sum(
+                    score for score_index, score in enumerate(bounded_scores)
+                    if score_index != index
+                )
+                if other_total <= RELATED_WEIGHT:
+                    bounded_scores[index] = round(
+                        max(0.0, RELATED_WEIGHT - other_total),
+                        8,
+                    )
+                    break
         reasons = [
-            reason.model_copy(update={"score": round(reason.score * scale, 4)})
-            for reason in reasons
+            reason.model_copy(update={"score": score})
+            for reason, score in zip(reasons, bounded_scores, strict=True)
         ]
-        contribution = RELATED_WEIGHT
+        contribution = sum(bounded_scores)
     return related_ids, reasons, contribution
 
 
@@ -192,6 +240,8 @@ def score_candidate(
     query: str | ParsedQuery,
     *,
     entries: Mapping[str, IndexEntry] | None = None,
+    semantic_index: EmbeddingSemanticIndex | None = None,
+    embedding_client: EmbeddingClient | None = None,
 ) -> RetrievalCandidate | None:
     """Score one Index entry and return an explainable candidate if matched."""
 
@@ -199,10 +249,17 @@ def score_candidate(
     if parsed.is_empty:
         return None
 
+    if semantic_index is None and embedding_client is None:
+        embedding_client = DashScopeEmbeddingClient.from_environment()
+    if semantic_index is None and embedding_client is not None:
+        corpus = tuple(entries.values()) if entries is not None else (entry,)
+        if all(candidate.document_id != entry.document_id for candidate in corpus):
+            corpus = (*corpus, entry)
+        semantic_index = EmbeddingSemanticIndex(corpus, embedding_client)
+
     direct_matches = _direct_matches(entry, parsed)
     reasons: list[RetrievalReason] = []
     evidence_values: dict[str, list[str]] = {field: [] for field in _ALL_FIELDS}
-    score = 0.0
     for field in _DIRECT_FIELDS:
         match = direct_matches.get(field)
         if match is None:
@@ -219,18 +276,39 @@ def score_candidate(
                 ),
             ),
         )
-        score += contribution
+
+    semantic = (
+        semantic_index.match(parsed.raw, entry)
+        if semantic_index is not None
+        else None
+    )
+    if semantic is not None and semantic.similarity >= SEMANTIC_MIN_SIMILARITY:
+        evidence_values["semantic"] = list(semantic.features)
+        reasons.append(
+            RetrievalReason(
+                field="semantic",
+                matches=list(semantic.features),
+                score=round(SEMANTIC_WEIGHT * semantic.similarity, 4),
+                explanation=(
+                    f"{SEMANTIC_METHOD} "
+                    f"model={semantic.model}; "
+                    f"dimension={semantic.dimension}; "
+                    f"similarity={semantic.similarity:.4f}; "
+                    f"represented fields: {', '.join(semantic.features)}"
+                ),
+            ),
+        )
 
     if entries is not None and entry.related:
-        related_ids, related_reasons, related_score = _related_matches(
+        related_ids, related_reasons, _ = _related_matches(
             entry,
             parsed,
             entries,
+            semantic_index,
         )
         if related_ids:
             evidence_values["related"] = related_ids
             reasons.extend(related_reasons)
-            score += related_score
 
     if not reasons:
         return None
@@ -241,7 +319,7 @@ def score_candidate(
         document_id=entry.document_id,
         raw_document_id=entry.document_id,
         title=entry.title,
-        score=round(min(1.0, score), 4),
+        score=round(min(1.0, sum(reason.score for reason in reasons)), 4),
         note_path=entry.note_path,
         evidence=evidence,
         reasons=reasons,
@@ -253,6 +331,7 @@ def rank_candidates(
     query: str | ParsedQuery,
     *,
     limit: int | None = None,
+    embedding_client: EmbeddingClient | None = None,
 ) -> list[RetrievalCandidate]:
     """Return stable, explainably scored candidates from an Index object."""
 
@@ -262,10 +341,25 @@ def rank_candidates(
         raise ValueError("limit must be greater than zero")
 
     entries_by_id = {entry.document_id: entry for entry in index.entries}
+    parsed = query if isinstance(query, ParsedQuery) else parse_query(query)
+    if embedding_client is None:
+        embedding_client = DashScopeEmbeddingClient.from_environment()
+    semantic_index = (
+        EmbeddingSemanticIndex(tuple(index.entries), embedding_client)
+        if embedding_client is not None
+        else None
+    )
     candidates = [
         candidate
         for entry in index.entries
-        if (candidate := score_candidate(entry, query, entries=entries_by_id))
+        if (
+            candidate := score_candidate(
+                entry,
+                parsed,
+                entries=entries_by_id,
+                semantic_index=semantic_index,
+            )
+        )
     ]
     candidates.sort(key=lambda candidate: (-candidate.score, candidate.document_id))
     return candidates if limit is None else candidates[:limit]
@@ -276,10 +370,16 @@ def retrieve_from_index(
     query: str,
     *,
     limit: int | None = 10,
+    embedding_client: EmbeddingClient | None = None,
 ) -> RetrievalResult:
     """Search an already loaded local Index without performing any writes."""
 
-    candidates = rank_candidates(index, query, limit=limit)
+    candidates = rank_candidates(
+        index,
+        query,
+        limit=limit,
+        embedding_client=embedding_client,
+    )
     return RetrievalResult(
         query=query,
         status="ok" if candidates else "no_hits",
@@ -292,11 +392,17 @@ def search_index(
     query: str,
     *,
     limit: int | None = 10,
+    embedding_client: EmbeddingClient | None = None,
 ) -> RetrievalResult:
     """Load a JSON Index if needed, then perform one local retrieval."""
 
     loaded = read_index(index) if isinstance(index, (str, Path)) else index
-    return retrieve_from_index(loaded, query, limit=limit)
+    return retrieve_from_index(
+        loaded,
+        query,
+        limit=limit,
+        embedding_client=embedding_client,
+    )
 
 
 retrieve = search_index
@@ -330,25 +436,47 @@ class RetrievalService:
         assert self.index_path is not None
         return read_index(self.index_path)
 
-    def search(self, query: str, *, limit: int | None = 10) -> RetrievalResult:
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int | None = 10,
+        embedding_client: EmbeddingClient | None = None,
+    ) -> RetrievalResult:
         """Search the configured Index."""
 
-        return retrieve_from_index(self._load(), query, limit=limit)
+        return retrieve_from_index(
+            self._load(),
+            query,
+            limit=limit,
+            embedding_client=embedding_client,
+        )
 
-    def retrieve(self, query: str, *, limit: int | None = 10) -> RetrievalResult:
+    def retrieve(
+        self,
+        query: str,
+        *,
+        limit: int | None = 10,
+        embedding_client: EmbeddingClient | None = None,
+    ) -> RetrievalResult:
         """Alias for ``search`` used by retrieval-oriented callers."""
 
-        return self.search(query, limit=limit)
+        return self.search(query, limit=limit, embedding_client=embedding_client)
 
     def build_candidate_judgment_request(
         self,
         query: str,
         *,
         limit: int | None = 10,
+        embedding_client: EmbeddingClient | None = None,
     ) -> CandidateJudgmentRequest:
         """Prepare a future AI boundary without invoking any Provider."""
 
-        result = self.search(query, limit=limit)
+        result = self.search(
+            query,
+            limit=limit,
+            embedding_client=embedding_client,
+        )
         return CandidateJudgmentRequest(
             query=query,
             candidates=result.candidates,

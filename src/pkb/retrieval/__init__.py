@@ -14,6 +14,8 @@ from pkb.retrieval.model import (
 from pkb.retrieval.service import (
     FIELD_WEIGHTS,
     RELATED_WEIGHT,
+    SEMANTIC_MIN_SIMILARITY,
+    SEMANTIC_WEIGHT,
     IndexRetriever,
     ParsedQuery,
     RetrievalService,
@@ -25,13 +27,32 @@ from pkb.retrieval.service import (
     search,
     search_index,
 )
+from pkb.retrieval.semantic import (
+    DEFAULT_EMBEDDING_MODEL,
+    DashScopeEmbeddingClient,
+    EmbeddingClient,
+    EmbeddingRequestError,
+    EmbeddingSemanticIndex,
+    SEMANTIC_METHOD,
+    SemanticMatch,
+    semantic_match,
+    semantic_similarity,
+)
 
 __all__ = [
     "CandidateJudgmentRequest",
+    "DEFAULT_EMBEDDING_MODEL",
+    "DashScopeEmbeddingClient",
+    "EmbeddingClient",
+    "EmbeddingRequestError",
+    "EmbeddingSemanticIndex",
     "FIELD_WEIGHTS",
     "IndexRetriever",
     "ParsedQuery",
     "RELATED_WEIGHT",
+    "SEMANTIC_METHOD",
+    "SEMANTIC_MIN_SIMILARITY",
+    "SEMANTIC_WEIGHT",
     "RetrievalCandidate",
     "RetrievalEvidence",
     "RetrievalField",
@@ -39,6 +60,7 @@ __all__ = [
     "RetrievalResult",
     "RetrievalService",
     "RetrievalStatus",
+    "SemanticMatch",
     "SearchCandidate",
     "SearchResult",
     "parse_query",
@@ -48,4 +70,6 @@ __all__ = [
     "score_candidate",
     "search",
     "search_index",
+    "semantic_match",
+    "semantic_similarity",
 ]

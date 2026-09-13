@@ -18,7 +18,12 @@ from pkb.models import UnifiedDocument
 from pkb.notes import NoteGenerationResult, NoteService
 from pkb.providers import AIProvider, configured_provider, provider_from_values
 from pkb.qa import QAResult, QAService
-from pkb.retrieval import RetrievalResult, RetrievalService
+from pkb.retrieval import (
+    DashScopeEmbeddingClient,
+    EmbeddingClient,
+    RetrievalResult,
+    RetrievalService,
+)
 from pkb.scripts import ScriptResult, ScriptWriter
 from pkb.topics import TopicCandidate, TopicGenerationResult, TopicGenerator
 
@@ -93,11 +98,13 @@ class UIService:
         paths: UIPaths | None = None,
         *,
         provider: AIProvider | None = None,
+        embedding_client: EmbeddingClient | None = None,
     ) -> None:
         self.paths = paths or UIPaths.from_settings()
         # Core services keep MockAIProvider for deterministic unit tests.  The
         # user-facing UI must never present that fixture text as an AI answer.
         self.provider = provider if provider is not None else configured_provider()
+        self.embedding_client = embedding_client
 
     @classmethod
     def with_session_provider(
@@ -108,12 +115,28 @@ class UIService:
         model: str,
         base_url: str,
         api_key: str,
+        embedding_model: str | None = None,
+        embedding_base_url: str | None = None,
+        embedding_api_key: str | None = None,
     ) -> "UIService":
         """Bind a browser-session Provider without persisting its API key."""
 
+        embedding_client = None
+        embedding_values = (
+            (embedding_model or "").strip(),
+            (embedding_base_url or "").strip(),
+            (embedding_api_key or "").strip(),
+        )
+        if all(embedding_values):
+            embedding_client = DashScopeEmbeddingClient(
+                model=embedding_values[0],
+                base_url=embedding_values[1],
+                api_key=embedding_values[2],
+            )
         return cls(
             paths,
             provider=provider_from_values(provider_name, model, base_url, api_key),
+            embedding_client=embedding_client,
         )
 
     def _persist_ingest(self, document: UnifiedDocument) -> IngestResult:
@@ -170,7 +193,11 @@ class UIService:
     def search(self, query: str, *, limit: int = 10) -> RetrievalResult:
         """Search the current local Index."""
 
-        return RetrievalService(self.paths.index_path).search(query, limit=limit)
+        return RetrievalService(self.paths.index_path).search(
+            query,
+            limit=limit,
+            embedding_client=self.embedding_client,
+        )
 
     def answer(self, question: str, *, limit: int = 10) -> QAResult:
         """Answer from the local Knowledge, Notes, and Raw stores."""
@@ -181,6 +208,7 @@ class UIService:
             notes_dir=self.paths.notes_dir,
             raw_dir=self.paths.raw_dir,
             provider=self.provider,
+            embedding_client=self.embedding_client,
         ).answer(question, limit=limit)
 
     def synthesize_topic(self, topic: str) -> KnowledgeRecord:

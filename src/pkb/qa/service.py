@@ -20,6 +20,7 @@ from pkb.providers import (
     ProviderNotConfiguredError,
 )
 from pkb.retrieval.model import RetrievalCandidate, RetrievalResult
+from pkb.retrieval.semantic import EmbeddingClient
 from pkb.retrieval.service import RetrievalService, parse_query
 from pkb.storage import RawStorage, RawStorageError
 
@@ -149,6 +150,7 @@ class QAService:
         raw_dir: str | Path | None = None,
         raw_storage: RawStorage | None = None,
         provider: AIProvider | None = None,
+        embedding_client: EmbeddingClient | None = None,
     ) -> None:
         settings = get_settings()
         if index is not None and index_path is not None:
@@ -180,6 +182,7 @@ class QAService:
             raw_dir if raw_dir is not None else settings.raw_dir
         )
         self.provider = provider if provider is not None else MockAIProvider()
+        self.embedding_client = embedding_client
 
     def _load_index(self) -> IndexFile:
         if self._index is not None:
@@ -547,7 +550,11 @@ class QAService:
             )
 
         index = self._load_index()
-        retrieval = RetrievalService(index).search(question, limit=limit)
+        retrieval = RetrievalService(index).search(
+            question,
+            limit=limit,
+            embedding_client=self.embedding_client,
+        )
         knowledge_matches = self._knowledge_matches(
             question,
             retrieval,
@@ -730,6 +737,7 @@ def answer_question(
     raw_dir: str | Path | None = None,
     raw_storage: RawStorage | None = None,
     limit: int | None = 10,
+    embedding_client: EmbeddingClient | None = None,
 ) -> QAResult:
     """Answer one question using the configured local stores."""
 
@@ -743,6 +751,7 @@ def answer_question(
         raw_dir=raw_dir,
         raw_storage=raw_storage,
         provider=provider,
+        embedding_client=embedding_client,
     ).answer(question, limit=limit)
 
 

@@ -3,12 +3,13 @@ from pathlib import Path
 
 import pymupdf
 
-from pkb.index import IndexBuilder
+from pkb.index import IndexBuilder, IndexEntry, IndexFile, write_index
 from pkb.knowledge import KnowledgeSource, KnowledgeStorage, TopicKnowledge
 from pkb.models import UnifiedDocument
 from pkb.notes import Note, NoteStorage
 from pkb.providers import MockAIProvider, OpenAICompatibleProvider
 from pkb.storage import RawStorage
+from pkb.retrieval import DashScopeEmbeddingClient
 from pkb.topics import TopicCandidate, TopicEvidence, TopicReason, TopicSource
 from pkb.ui import UIPaths, UIService, can_generate_script
 
@@ -141,6 +142,87 @@ def test_ui_service_can_use_a_browser_session_provider_without_persisting_a_key(
 
     assert isinstance(service.provider, OpenAICompatibleProvider)
     assert service.provider.model == "session-model"
+
+
+def test_ui_session_embedding_configuration_is_passed_to_search_and_qa(
+    tmp_path,
+    monkeypatch,
+):
+    service = UIService.with_session_provider(
+        UIPaths.from_data_dir(tmp_path),
+        provider_name="deepseek",
+        model="session-model",
+        base_url="https://api.example.test/v1",
+        api_key="session-only-key",
+        embedding_model="qwen3.7-text-embedding-flash",
+        embedding_base_url="https://workspace.example.test/compatible-mode/v1",
+        embedding_api_key="embedding-session-key",
+    )
+
+    assert isinstance(service.embedding_client, DashScopeEmbeddingClient)
+    assert service.embedding_client.model == "qwen3.7-text-embedding-flash"
+
+    captured = {}
+
+    class FakeRetrievalService:
+        def __init__(self, _index_path):
+            pass
+
+        def search(self, _query, *, limit, embedding_client):
+            captured["search"] = embedding_client
+            return None
+
+    class FakeQAService:
+        def __init__(self, **kwargs):
+            captured["qa"] = kwargs["embedding_client"]
+
+        def answer(self, _question, *, limit):
+            return None
+
+    monkeypatch.setattr("pkb.ui.services.RetrievalService", FakeRetrievalService)
+    monkeypatch.setattr("pkb.ui.services.QAService", FakeQAService)
+
+    service.search("动作自然")
+    service.answer("动作自然")
+
+    assert captured == {
+        "search": service.embedding_client,
+        "qa": service.embedding_client,
+    }
+
+
+def test_ui_without_embedding_configuration_does_not_make_network_requests(
+    tmp_path,
+    monkeypatch,
+):
+    index_path = UIPaths.from_data_dir(tmp_path).index_path
+    write_index(
+        index_path,
+        IndexFile(
+            notes_dir=str(tmp_path / "notes"),
+            entries=[
+                IndexEntry(
+                    document_id="one",
+                    title="AI 工作流",
+                    source_type="manual",
+                    note_path=str(tmp_path / "notes" / "one.md"),
+                ),
+            ],
+        ),
+    )
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.delenv("PKB_EMBEDDING_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        DashScopeEmbeddingClient,
+        "embed",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("network embedding must not be called")
+        ),
+    )
+
+    result = UIService(UIPaths.from_data_dir(tmp_path)).search("AI")
+
+    assert result.found
 
 
 def test_pdf_import_runs_the_minimal_persisted_ui_slice(tmp_path):
