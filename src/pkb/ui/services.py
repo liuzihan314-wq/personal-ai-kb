@@ -139,6 +139,28 @@ class UIService:
             embedding_client=embedding_client,
         )
 
+    @classmethod
+    def with_session_embedding(
+        cls,
+        paths: UIPaths,
+        *,
+        embedding_model: str,
+        embedding_base_url: str,
+        embedding_api_key: str,
+        provider: AIProvider | None = None,
+    ) -> "UIService":
+        """Bind only a browser-session Embedding client."""
+
+        return cls(
+            paths,
+            provider=provider,
+            embedding_client=DashScopeEmbeddingClient(
+                model=embedding_model,
+                base_url=embedding_base_url,
+                api_key=embedding_api_key,
+            ),
+        )
+
     def _persist_ingest(self, document: UnifiedDocument) -> IngestResult:
         note = NoteService(
             provider=self.provider,

@@ -28,6 +28,9 @@ from pkb.retrieval.semantic import (
 )
 
 
+_EMBEDDING_AUTO = object()
+
+
 FIELD_WEIGHTS: Mapping[RetrievalField, float] = {
     "title": 0.30,
     "tags": 0.20,
@@ -241,7 +244,7 @@ def score_candidate(
     *,
     entries: Mapping[str, IndexEntry] | None = None,
     semantic_index: EmbeddingSemanticIndex | None = None,
-    embedding_client: EmbeddingClient | None = None,
+    embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
 ) -> RetrievalCandidate | None:
     """Score one Index entry and return an explainable candidate if matched."""
 
@@ -249,9 +252,13 @@ def score_candidate(
     if parsed.is_empty:
         return None
 
-    if semantic_index is None and embedding_client is None:
+    if semantic_index is None and embedding_client is _EMBEDDING_AUTO:
         embedding_client = DashScopeEmbeddingClient.from_environment()
-    if semantic_index is None and embedding_client is not None:
+    if (
+        semantic_index is None
+        and embedding_client is not None
+        and embedding_client is not _EMBEDDING_AUTO
+    ):
         corpus = tuple(entries.values()) if entries is not None else (entry,)
         if all(candidate.document_id != entry.document_id for candidate in corpus):
             corpus = (*corpus, entry)
@@ -331,7 +338,7 @@ def rank_candidates(
     query: str | ParsedQuery,
     *,
     limit: int | None = None,
-    embedding_client: EmbeddingClient | None = None,
+    embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
 ) -> list[RetrievalCandidate]:
     """Return stable, explainably scored candidates from an Index object."""
 
@@ -342,11 +349,11 @@ def rank_candidates(
 
     entries_by_id = {entry.document_id: entry for entry in index.entries}
     parsed = query if isinstance(query, ParsedQuery) else parse_query(query)
-    if embedding_client is None:
+    if embedding_client is _EMBEDDING_AUTO:
         embedding_client = DashScopeEmbeddingClient.from_environment()
     semantic_index = (
         EmbeddingSemanticIndex(tuple(index.entries), embedding_client)
-        if embedding_client is not None
+        if embedding_client is not None and embedding_client is not _EMBEDDING_AUTO
         else None
     )
     candidates = [
@@ -358,6 +365,7 @@ def rank_candidates(
                 parsed,
                 entries=entries_by_id,
                 semantic_index=semantic_index,
+                embedding_client=embedding_client,
             )
         )
     ]
@@ -370,7 +378,7 @@ def retrieve_from_index(
     query: str,
     *,
     limit: int | None = 10,
-    embedding_client: EmbeddingClient | None = None,
+    embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
 ) -> RetrievalResult:
     """Search an already loaded local Index without performing any writes."""
 
@@ -392,7 +400,7 @@ def search_index(
     query: str,
     *,
     limit: int | None = 10,
-    embedding_client: EmbeddingClient | None = None,
+    embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
 ) -> RetrievalResult:
     """Load a JSON Index if needed, then perform one local retrieval."""
 
@@ -441,7 +449,7 @@ class RetrievalService:
         query: str,
         *,
         limit: int | None = 10,
-        embedding_client: EmbeddingClient | None = None,
+        embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
     ) -> RetrievalResult:
         """Search the configured Index."""
 
@@ -457,7 +465,7 @@ class RetrievalService:
         query: str,
         *,
         limit: int | None = 10,
-        embedding_client: EmbeddingClient | None = None,
+        embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
     ) -> RetrievalResult:
         """Alias for ``search`` used by retrieval-oriented callers."""
 
@@ -468,7 +476,7 @@ class RetrievalService:
         query: str,
         *,
         limit: int | None = 10,
-        embedding_client: EmbeddingClient | None = None,
+        embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
     ) -> CandidateJudgmentRequest:
         """Prepare a future AI boundary without invoking any Provider."""
 

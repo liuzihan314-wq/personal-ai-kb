@@ -144,6 +144,19 @@ def test_ui_service_can_use_a_browser_session_provider_without_persisting_a_key(
     assert service.provider.model == "session-model"
 
 
+def test_ui_can_enable_embedding_without_replacing_chat_provider(tmp_path):
+    service = UIService.with_session_embedding(
+        UIPaths.from_data_dir(tmp_path),
+        embedding_model="qwen3.7-text-embedding-flash",
+        embedding_base_url="https://workspace.example.test/compatible-mode/v1",
+        embedding_api_key="embedding-session-key",
+        provider=MockAIProvider(),
+    )
+
+    assert isinstance(service.provider, MockAIProvider)
+    assert isinstance(service.embedding_client, DashScopeEmbeddingClient)
+
+
 def test_ui_session_embedding_configuration_is_passed_to_search_and_qa(
     tmp_path,
     monkeypatch,
@@ -214,15 +227,16 @@ def test_ui_without_embedding_configuration_does_not_make_network_requests(
     monkeypatch.delenv("PKB_EMBEDDING_BASE_URL", raising=False)
     monkeypatch.setattr(
         DashScopeEmbeddingClient,
-        "embed",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("network embedding must not be called")
-        ),
+        "from_environment",
+        lambda: (_ for _ in ()).throw(AssertionError("environment client must not be used")),
     )
 
-    result = UIService(UIPaths.from_data_dir(tmp_path)).search("AI")
+    service = UIService(UIPaths.from_data_dir(tmp_path))
+    result = service.search("AI")
+    qa_result = service.answer("AI")
 
     assert result.found
+    assert qa_result.status == "insufficient_evidence"
 
 
 def test_pdf_import_runs_the_minimal_persisted_ui_slice(tmp_path):

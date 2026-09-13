@@ -136,10 +136,23 @@ def _provider_session_values() -> dict[str, str] | None:
     return result
 
 
+def _embedding_session_values() -> dict[str, str] | None:
+    """Return independent browser-only Embedding settings, if applied."""
+
+    values = st.session_state.get("provider_session")
+    if not isinstance(values, dict):
+        return None
+    required = ("embedding_model", "embedding_base_url", "embedding_api_key")
+    if not all(isinstance(values.get(key), str) for key in required):
+        return None
+    return {key: values[key] for key in required}
+
+
 def _render_provider_configuration() -> None:
     """Render a session-only credential form without exposing the API key."""
 
     current = _provider_session_values() or {}
+    embedding = _embedding_session_values() or {}
     with st.expander("AI 服务设置", expanded=not bool(current)):
         st.caption("仅在当前浏览器会话中临时保存；刷新或关闭页面后需重新填写。不会写入本地 .env 文件。")
         with st.form("provider_configuration_form"):
@@ -164,52 +177,89 @@ def _render_provider_configuration() -> None:
                 value="",
                 placeholder="粘贴你的 API Key",
             )
-            st.markdown("**语义检索 / DashScope Embedding（可选）**")
-            st.caption("未配置时只使用标题、标签、关键词和 Topic 的直接检索；配置后才启用语义向量召回。")
-            embedding_model = st.text_input(
-                "Embedding 模型",
-                value=current.get("embedding_model", "qwen3.7-text-embedding-flash"),
-                placeholder="qwen3.7-text-embedding-flash",
-            )
-            embedding_base_url = st.text_input(
-                "Embedding Base URL",
-                value=current.get("embedding_base_url", ""),
-                placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-            )
-            embedding_api_key = st.text_input(
-                "Embedding API Key",
-                type="password",
-                value="",
-                placeholder="粘贴 Embedding API Key",
-            )
             apply = st.form_submit_button("应用到当前会话", use_container_width=True)
         if apply:
             provider_key = api_key.strip() or current.get("api_key", "")
-            embedding_key = embedding_api_key.strip() or current.get("embedding_api_key", "")
-            embedding_values = (
-                embedding_model.strip(),
-                embedding_base_url.strip(),
-                embedding_key,
-            )
             if not all(value.strip() for value in (model, base_url, provider_key)):
                 st.warning("请填写模型、接口地址和 API 密钥。")
-            elif any(embedding_values) and not all(embedding_values):
-                st.warning("语义检索配置需要同时填写 Embedding 模型、Base URL 和 API Key。")
             else:
-                st.session_state["provider_session"] = {
+                session_values = {
                     "provider_name": "deepseek"
                     if provider_label == "DeepSeek"
                 else "openai-compatible",
                     "model": model.strip(),
                     "base_url": base_url.strip(),
                     "api_key": provider_key,
-                    "embedding_model": embedding_values[0],
-                    "embedding_base_url": embedding_values[1],
-                    "embedding_api_key": embedding_values[2],
                 }
+                session_values.update(embedding)
+                st.session_state["provider_session"] = session_values
                 st.success("已应用到当前会话。API 密钥不会写入本地文件。")
         if current and st.button("清除当前会话配置", key="clear_provider_session"):
             st.session_state["provider_session"] = None
+            st.rerun()
+
+
+def _render_embedding_configuration() -> None:
+    """Render an independent, browser-session-only Embedding form."""
+
+    current = _embedding_session_values() or {}
+    session_values = st.session_state.get("provider_session")
+    if not isinstance(session_values, dict):
+        session_values = {}
+    embedding_keys = ("embedding_model", "embedding_base_url", "embedding_api_key")
+    enabled = all(current.get(key, "").strip() for key in embedding_keys)
+    with st.expander("语义检索 / DashScope Embedding", expanded=not enabled):
+        if enabled:
+            st.success("当前已启用 DashScope 语义检索。")
+        else:
+            st.info("当前为仅直接检索；配置后才会启用语义向量召回。")
+        st.caption("配置仅保存在当前浏览器会话，不写入 .env 文件。")
+        with st.form("embedding_configuration_form"):
+            model = st.text_input(
+                "Embedding 模型",
+                value=current.get("embedding_model", "qwen3.7-text-embedding-flash"),
+            )
+            base_url = st.text_input(
+                "Embedding Base URL",
+                value=current.get("embedding_base_url", ""),
+                placeholder="https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            )
+            api_key = st.text_input(
+                "Embedding API Key",
+                type="password",
+                value="",
+                placeholder="粘贴 Embedding API Key",
+            )
+            apply = st.form_submit_button("应用语义检索配置", use_container_width=True)
+        if apply:
+            key = api_key.strip() or current.get("embedding_api_key", "")
+            values = (model.strip(), base_url.strip(), key)
+            if not any(values):
+                remaining = {
+                    key: value
+                    for key, value in session_values.items()
+                    if not key.startswith("embedding_")
+                }
+                st.session_state["provider_session"] = remaining or None
+                st.info("当前为仅直接检索。")
+            elif not all(values):
+                st.warning("请同时填写 Embedding 模型、Base URL 和 API Key。")
+            else:
+                updated = dict(session_values)
+                updated.update(
+                    embedding_model=values[0],
+                    embedding_base_url=values[1],
+                    embedding_api_key=values[2],
+                )
+                st.session_state["provider_session"] = updated
+                st.success("已启用 DashScope 语义检索，仅在当前会话生效。")
+        if enabled and st.button("关闭语义检索", key="clear_embedding_session"):
+            remaining = {
+                key: value
+                for key, value in session_values.items()
+                if not key.startswith("embedding_")
+            }
+            st.session_state["provider_session"] = remaining or None
             st.rerun()
 
 
@@ -239,15 +289,30 @@ def _render_sidebar(service: UIService) -> None:
         st.caption(f"数据目录：{service.paths.data_dir}")
         st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
         _render_provider_configuration()
+        _render_embedding_configuration()
 
 
 def _service_for_current_session(default_service: UIService) -> UIService:
     """Overlay browser-only credentials onto the default service binding."""
 
     values = _provider_session_values()
-    if values is None:
-        return default_service
-    return UIService.with_session_provider(default_service.paths, **values)
+    embedding = _embedding_session_values()
+    if values is not None:
+        return UIService.with_session_provider(
+            default_service.paths,
+            provider_name=values["provider_name"],
+            model=values["model"],
+            base_url=values["base_url"],
+            api_key=values["api_key"],
+            **(embedding or {}),
+        )
+    if embedding is not None:
+        return UIService.with_session_embedding(
+            default_service.paths,
+            provider=default_service.provider,
+            **embedding,
+        )
+    return default_service
 
 
 def _render_section_header(
