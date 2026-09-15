@@ -13,6 +13,7 @@ from pkb.ingest.wechat import (
     WeChatArticleImporter,
     WeChatArticleService,
     WeChatManualImportError,
+    WECHAT_BROWSER_USER_AGENT,
     InvalidWeChatURL,
     is_wechat_article_url,
     normalize_wechat_article_url,
@@ -187,6 +188,8 @@ def test_downloader_uses_certifi_tls_context(monkeypatch, tmp_path):
     assert isinstance(https_handler._context, ssl.SSLContext)
     assert https_handler._context.verify_mode == ssl.CERT_REQUIRED
     assert https_handler._context.check_hostname
+    assert captured["request"].headers["User-agent"] == WECHAT_BROWSER_USER_AGENT
+    assert captured["request"].headers["Accept-language"] == "zh-CN,zh;q=0.9"
 
 
 def test_auto_extract_failure_returns_manual_required_without_raw(tmp_path):

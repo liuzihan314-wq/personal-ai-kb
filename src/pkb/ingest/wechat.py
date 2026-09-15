@@ -33,6 +33,11 @@ WECHAT_SOURCE_TYPE = "wechat"
 WECHAT_INGEST_MODE = "manual"
 MANUAL_REQUIRED_STATUS = "manual_required"
 MANUAL_REQUIRED_MESSAGE = "自动提取失败，请补充非空标题和正文后重新提交。"
+WECHAT_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
+    "MicroMessenger/8.0.50(0x18003237) NetType/WIFI Language/zh_CN"
+)
 
 
 class WeChatImportError(ValueError):
@@ -404,7 +409,8 @@ class WeChatArticleImporter:
             normalized_url,
             headers={
                 "Accept": "text/html,application/xhtml+xml",
-                "User-Agent": "PersonalAIKnowledgeBase/0.1",
+                "Accept-Language": "zh-CN,zh;q=0.9",
+                "User-Agent": WECHAT_BROWSER_USER_AGENT,
             },
             method="GET",
         )
