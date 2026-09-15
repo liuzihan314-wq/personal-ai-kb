@@ -505,9 +505,11 @@ Acceptance:
 
 ## TASK-026 — Manual WeChat Article Import
 
-Status: READY
+Status: DONE
 Dependencies: TASK-003, TASK-016
 Suggested branch: `feat/manual-wechat-article`
+
+Acceptance record: 2026-09-15 MAIN verified the URL allow-list, immutable text Raw storage, normalized-URL deduplication, CLI/UI shared Core Service, manual fallback, Note/Index persistence and PDF/Idea regression. The public-article end-to-end slice used a temporary data directory and produced article Raw, Note and Index without recording article content in Git. HTTPS validation uses certifi's CA bundle; public fetches send a minimal mobile WeChat compatibility User-Agent and Chinese language header, without Cookie, login state, proxy, device fingerprint, CAPTCHA bypass or database access. Targeted tests passed (11); full regression passed (90), with the existing PyMuPDF/SWIG warnings only.
 
 Goal:
 
