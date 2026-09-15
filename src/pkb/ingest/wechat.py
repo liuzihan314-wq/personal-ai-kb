@@ -182,6 +182,22 @@ class _ArticleHTMLParser(HTMLParser):
         "tr",
     }
     _SKIP_TAGS = {"script", "style", "noscript"}
+    _VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -235,9 +251,10 @@ class _ArticleHTMLParser(HTMLParser):
             or "rich_media_content" in classes
         )
         if self._content_depth:
-            self._content_depth += 1
             if tag in self._BLOCK_TAGS:
                 self.content_parts.append("\n")
+            if tag not in self._VOID_TAGS:
+                self._content_depth += 1
         elif is_content_root:
             self._content_depth = 1
 
@@ -259,11 +276,17 @@ class _ArticleHTMLParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
+        if tag.casefold() in self._VOID_TAGS:
+            if self._content_depth and tag.casefold() in self._BLOCK_TAGS:
+                self.content_parts.append("\n")
+            return
         self.handle_starttag(tag, attrs)
         self.handle_endtag(tag)
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()
+        if tag in self._VOID_TAGS:
+            return
         if self._content_depth and tag in self._BLOCK_TAGS:
             self.content_parts.append("\n")
         if self._content_depth and tag in self._SKIP_TAGS and self._skip_depth:

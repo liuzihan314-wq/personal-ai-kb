@@ -37,8 +37,10 @@ def _synthetic_article_html() -> bytes:
         <span id="js_name">Synthetic Author</span>
         <div id="js_content">
           <p>第一段合成正文，验证公众号文章导入。</p>
-          <p>第二段保留换行，并跳过<script>private fixture marker</script>脚本。</p>
+          <p>第二段保留换行，并跳过<img src="fixture.png" />
+            <script>private fixture marker</script>脚本。</p>
         </div>
+        <div id="fixture-footer">正文之后的页脚不应进入 Raw。</div>
       </body>
     </html>
     """.encode("utf-8")
@@ -140,6 +142,7 @@ def test_auto_extract_success_uses_existing_document_contract_without_html_raw(t
     assert result.document.title == "Synthetic WeChat Article"
     assert "第一段合成正文" in result.document.content
     assert "private fixture marker" not in result.document.content
+    assert "正文之后的页脚" not in result.document.content
     assert result.document.content_type == "article"
     assert result.document.source_type == "wechat"
     assert Path(result.document.original_file).suffix == ".txt"
