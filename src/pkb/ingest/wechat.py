@@ -13,9 +13,12 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
+import ssl
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 import urllib.request
+
+import certifi
 
 from pkb.config import get_settings
 from pkb.index import IndexBuilder, IndexFile
@@ -405,7 +408,11 @@ class WeChatArticleImporter:
             },
             method="GET",
         )
-        opener = urllib.request.build_opener(_AllowlistedRedirectHandler())
+        context = ssl.create_default_context(cafile=certifi.where())
+        opener = urllib.request.build_opener(
+            _AllowlistedRedirectHandler(),
+            urllib.request.HTTPSHandler(context=context),
+        )
         with opener.open(request, timeout=self.timeout) as response:
             final_url = response.geturl()
             if normalize_wechat_article_url(final_url) != normalized_url:

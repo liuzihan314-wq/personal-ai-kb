@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import ssl
+import urllib.request
 
 import pytest
 from typer.testing import CliRunner
@@ -146,6 +148,45 @@ def test_auto_extract_success_uses_existing_document_contract_without_html_raw(t
     assert result.document.content_type == "article"
     assert result.document.source_type == "wechat"
     assert Path(result.document.original_file).suffix == ".txt"
+
+
+def test_downloader_uses_certifi_tls_context(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def geturl(self):
+            return ARTICLE_URL
+
+        def read(self):
+            return b"<html></html>"
+
+    class Opener:
+        def open(self, request, *, timeout):
+            captured["request"] = request
+            captured["timeout"] = timeout
+            return Response()
+
+    def build_opener(*handlers):
+        captured["handlers"] = handlers
+        return Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
+    importer = WeChatArticleImporter(raw_dir=tmp_path / "raw")
+    assert importer._download(ARTICLE_URL) == b"<html></html>"
+    https_handler = next(
+        handler
+        for handler in captured["handlers"]
+        if isinstance(handler, urllib.request.HTTPSHandler)
+    )
+    assert isinstance(https_handler._context, ssl.SSLContext)
+    assert https_handler._context.verify_mode == ssl.CERT_REQUIRED
+    assert https_handler._context.check_hostname
 
 
 def test_auto_extract_failure_returns_manual_required_without_raw(tmp_path):

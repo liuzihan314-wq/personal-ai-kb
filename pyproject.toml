@@ -9,6 +9,7 @@ description = "A local, traceable personal AI knowledge base."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "certifi>=2025.1.31",
     "pymupdf>=1.24,<2",
     "pydantic-settings>=2.7,<3",
     "streamlit>=1.39,<2",
