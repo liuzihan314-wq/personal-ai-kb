@@ -17,6 +17,7 @@ from pkb.ui.styles import THEME_CSS
 
 _STATE_DEFAULTS: dict[str, Any] = {
     "last_ingest": None,
+    "wechat_import_result": None,
     "search_result": None,
     "qa_result": None,
     "knowledge_result": None,
@@ -368,6 +369,61 @@ def _render_ingest_result(result: IngestResult | None) -> None:
         st.caption(f"Note：{result.note.path}")
 
 
+def _render_wechat_import(service: UIService) -> None:
+    """Render the manual WeChat route and its explicit fetch fallback."""
+
+    _render_card_heading(
+        "CAPTURE / WECHAT",
+        "导入微信公众号文章",
+        "仅接受 https://mp.weixin.qq.com/s/...。可以先尝试自动提取，失败后补充标题和正文。",
+    )
+    with st.form("wechat_import_form"):
+        source_url = st.text_input(
+            "原始公众号文章 URL",
+            placeholder="https://mp.weixin.qq.com/s/...",
+        )
+        title = st.text_input("文章标题（自动提取失败时必填）")
+        content = st.text_area(
+            "文章正文（自动提取失败时必填）",
+            height=180,
+            placeholder="粘贴公众号文章正文",
+        )
+        submitted = st.form_submit_button(
+            "导入公众号文章",
+            type="primary",
+            use_container_width=True,
+        )
+    if submitted:
+        st.session_state["wechat_import_result"] = None
+        try:
+            result = service.import_wechat_article(
+                source_url,
+                title=title,
+                content=content,
+            )
+            st.session_state["wechat_import_result"] = result
+            if result.succeeded:
+                assert result.document is not None
+                assert result.note is not None
+                assert result.index is not None
+                st.session_state["last_ingest"] = IngestResult(
+                    document=result.document,
+                    note=result.note,
+                    index=result.index,
+                )
+                _invalidate_results_after_ingest(st.session_state)
+                st.session_state["ingest_notice"] = "已导入微信公众号文章。"
+                st.session_state["wechat_import_result"] = None
+                st.rerun()
+            st.warning(result.message)
+        except Exception as error:
+            _show_error(error)
+
+    result = st.session_state.get("wechat_import_result")
+    if result is not None and result.status == "manual_required":
+        st.info("自动提取未得到完整文章；请保留 URL，并补充非空标题和正文后再次提交。")
+
+
 def _render_retrieval(result: Any, *, heading: str = "检索结果") -> None:
     if result is None:
         return
@@ -424,6 +480,7 @@ def _render_import_tab(service: UIService) -> None:
         "先把可追溯的原始材料放进来，再用观点卡片补上你自己的判断。每次写入都会同步 Note 与本地 Index。",
         accent="purple",
     )
+    _render_wechat_import(service)
     pdf_column, idea_column = st.columns([1, 1], gap="large")
     with pdf_column:
         _render_card_heading("CAPTURE / PDF", "导入文本型 PDF", "适合保存文章、报告或课程材料。")

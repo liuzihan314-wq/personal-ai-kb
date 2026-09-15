@@ -9,6 +9,7 @@ import typer
 from pkb.config import Settings, get_settings
 from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
+from pkb.ingest.wechat import WeChatArticleService, WeChatURLValidationError
 from pkb.index import IndexBuildError, IndexService, IndexStorageError, read_index
 from pkb.logging_config import configure_logging
 from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
@@ -130,6 +131,57 @@ def add_idea(
 
 
 app.command("create-idea")(add_idea)
+
+
+@app.command("import-wechat-article")
+def import_wechat_article(
+    source_url: str = typer.Argument(
+        ...,
+        help="微信公众号文章 URL；仅支持 https://mp.weixin.qq.com/s/...。",
+    ),
+    title: str | None = typer.Option(
+        None,
+        "--title",
+        help="手动导入时的非空文章标题。",
+    ),
+    content: str | None = typer.Option(
+        None,
+        "--content",
+        "--body",
+        help="手动导入时的非空文章正文。",
+    ),
+) -> None:
+    """Import one public WeChat article or report that manual text is required."""
+
+    settings = _load_settings()
+    service = WeChatArticleService(
+        raw_dir=settings.raw_dir,
+        notes_dir=settings.notes_dir,
+        index_path=settings.index_dir / "index.json",
+    )
+    try:
+        result = service.import_article(source_url, title=title, content=content)
+    except WeChatURLValidationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="source_url") from exc
+
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"message: {result.message}")
+    if result.status == "manual_required":
+        typer.echo("next: provide --title and --content, then retry")
+        return
+
+    assert result.document is not None
+    assert result.note is not None
+    assert result.index is not None
+    document = result.document
+    typer.echo(f"id: {document.id}")
+    typer.echo(f"title: {document.title}")
+    typer.echo(f"content_type: {document.content_type}")
+    typer.echo(f"source_type: {document.source_type}")
+    typer.echo(f"raw_text: {document.original_file}")
+    typer.echo(f"metadata: {document.metadata['metadata_file']}")
+    typer.echo(f"note: {result.note.path}")
+    typer.echo(f"index_entries: {len(result.index.entries)}")
 
 
 @app.command("generate-note")

@@ -12,7 +12,12 @@ from tempfile import TemporaryDirectory
 
 from pkb.config import Settings, get_settings
 from pkb.index import IndexBuilder, IndexFile
-from pkb.ingest import IdeaCardImporter, PDFImporter
+from pkb.ingest import (
+    IdeaCardImporter,
+    PDFImporter,
+    WeChatArticleService,
+    WeChatImportResult,
+)
 from pkb.knowledge import KnowledgeCompiler, KnowledgeRecord
 from pkb.models import UnifiedDocument
 from pkb.notes import NoteGenerationResult, NoteService
@@ -211,6 +216,22 @@ class UIService:
             note=note,
         )
         return self._persist_ingest(document)
+
+    def import_wechat_article(
+        self,
+        source_url: str,
+        *,
+        title: str | None = None,
+        content: str | None = None,
+    ) -> WeChatImportResult:
+        """Import one WeChat article through the shared Core Service."""
+
+        return WeChatArticleService(
+            raw_dir=self.paths.raw_dir,
+            notes_dir=self.paths.notes_dir,
+            index_path=self.paths.index_path,
+            provider=self.provider,
+        ).import_article(source_url, title=title, content=content)
 
     def search(self, query: str, *, limit: int = 10) -> RetrievalResult:
         """Search the current local Index."""

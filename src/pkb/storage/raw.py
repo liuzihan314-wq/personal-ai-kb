@@ -42,13 +42,13 @@ class RawStorage:
     ) -> RawPaths:
         """Return the stable Raw paths for a document id.
 
-        PDFs keep the original V1 paths.  Manual idea cards have no binary
-        source file, so their UTF-8 source text is stored as ``original.txt``
-        and is also the extracted-text view.
+        PDFs keep the original V1 paths.  Manual idea cards and WeChat
+        articles have no binary source file, so their UTF-8 source text is
+        stored as ``original.txt`` and is also the extracted-text view.
         """
 
         directory = self.raw_dir / document_id
-        if content_type == "idea" or (
+        if content_type in {"idea", "article"} or (
             content_type is None
             and not (directory / "original.pdf").is_file()
             and (directory / "original.txt").is_file()
