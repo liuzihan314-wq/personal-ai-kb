@@ -9,11 +9,12 @@
 
 必须先读取：
 
-1. `PRODUCT.md`
-2. `ARCHITECTURE.md`
-3. `TECH_STACK.md`
-4. `ROADMAP.md`
-5. `CODEX_HANDOFF.md`
+1. `WECHAT_INPUT_ROUTE_HANDOFF.md`
+2. `PRODUCT.md`
+3. `ARCHITECTURE.md`
+4. `TECH_STACK.md`
+5. `ROADMAP.md`
+6. `CODEX_HANDOFF.md`
 
 然后只输出：
 
@@ -30,6 +31,8 @@
 最后等待用户确认。
 
 **用户确认前，不要开始编码。**
+
+涉及微信输入路线重新对齐时，以 `WECHAT_INPUT_ROUTE_HANDOFF.md` 末尾“给 MAIN 的启动提示词”为准。
 
 ---
 
@@ -192,7 +195,8 @@ macOS / Windows 差异必须通过 Adapter / platform module 管理。
 
 - 当前主要开发环境
 - 当前主要运行环境
-- WeChat 自动同步先做 macOS POC
+- Manual WeChat Article Import 是 V1 稳定入口
+- WeChat Favorites macOS POC 当前为 `BLOCKED`
 - Scheduler 使用 launchd
 
 ## Windows
@@ -200,7 +204,7 @@ macOS / Windows 差异必须通过 Adapter / platform module 管理。
 - 保留为备用运行环境
 - Core 尽量跨平台
 - 后续做 Core smoke test
-- Windows Scheduler / WeChat 属独立 Adapter
+- Windows Favorites 属未验证的独立 POC，Scheduler 在该 POC 通过后再实现
 - Windows 不阻塞 Mac V1 主线
 
 Worker 写 Core 时：
@@ -215,7 +219,19 @@ Worker 写 Core 时：
 
 # 10. WeChat Contract
 
-微信收藏输入只允许：
+微信输入拆为两个独立能力：
+
+## Manual WeChat Article Import（V1 MUST HAVE）
+
+- 用户提供明确的微信公众号文章 URL
+- 自动提取失败时允许提交标题、正文和原始 URL
+- 只允许公众号文章，普通网页和其他微信内容不得进入
+- 输出既有 UnifiedDocument，保持 Raw immutable 和重复导入幂等
+- 不修改 Notes / Knowledge / Index / Retrieval 公共接口
+
+## Favorites Auto Sync（Experimental / POC）
+
+收藏自动同步只允许：
 
 **微信公众号文章**
 
@@ -233,11 +249,13 @@ Worker 写 Core 时：
 
 不要因为“都是 link 类型”就全部导入。
 
-WeChat Adapter 必须有白名单识别。
+两种 WeChat Adapter 都必须有白名单识别。
 
-WeChat POC 是高风险外围任务。
+Favorites POC 是高风险外围任务。必须使用真实公众号文章、视频/视频号和普通 URL 样本验收；synthetic 分类测试不得写成真实平台同步通过。
 
 POC 失败不能阻塞核心知识库。
+
+Windows Favorites 目前只是备用 POC，不得把候选工具、命令或短期分支描述成已验证方案。平台 POC 失败不得扩散修改 Core。
 
 ---
 
@@ -477,7 +495,7 @@ MAIN 收到 Completion Report 后必须自行检查 Task Brief、Acceptance Crit
 
 将以下内容作为 MAIN 的第一条工作指令：
 
-> 请先完整阅读项目根目录中的 PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md、ROADMAP.md、CODEX_HANDOFF.md。  
+> 请先完整阅读项目根目录中的 WECHAT_INPUT_ROUTE_HANDOFF.md、PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md、ROADMAP.md、CODEX_HANDOFF.md。
 > 暂时不要写代码，也不要修改任何文件。  
 > 请用你自己的话复述：  
 > 1）产品解决什么问题；  
@@ -489,3 +507,5 @@ MAIN 收到 Completion Report 后必须自行检查 Task Brief、Acceptance Crit
 > 7）当前最大的 3 个风险；  
 > 8）ROADMAP 中第一个可执行任务是什么。  
 > 最后等待我确认你的理解，再开始下一步。
+
+涉及微信输入路线重新对齐时，改为执行 `WECHAT_INPUT_ROUTE_HANDOFF.md` 末尾 A～H 的启动提示词，并在用户确认前保持只读。

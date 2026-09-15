@@ -33,13 +33,15 @@ V1 采用“编译型个人知识库”思路：
 
 ```mermaid
 flowchart TD
-    A1[微信公众号收藏文章]
+    A1[手动导入微信公众号文章]
+    A1X[微信收藏自动同步 POC]
     A2[文本 PDF]
     A3[观点 / 好句卡片]
     A4[小红书 V2]
     A5[YouTube V2]
 
     A1 --> B[Input Adapters]
+    A1X -.Experimental.-> B
     A2 --> B
     A3 --> B
     A4 -.未来扩展.-> B
@@ -75,7 +77,20 @@ flowchart TD
 
 所有输入先转换为统一 `UnifiedDocument`，核心系统不直接依赖具体来源。
 
-### 3.1 WeChat Adapter
+### 3.1 WeChat Input
+
+微信输入拆为两个独立 Adapter，两者都输出既有 `UnifiedDocument`。
+
+#### Manual WeChat Article Adapter（V1）
+
+职责：
+
+- 接受明确的微信公众号文章 URL
+- 自动提取失败时接受标题、正文和原始 URL
+- 拒绝普通网页 URL、视频号和其他不受支持的微信链接
+- 去重并转为 UnifiedDocument
+
+#### Favorites Auto Sync Adapter（Experimental / POC）
 
 职责：
 
@@ -86,7 +101,7 @@ flowchart TD
 - 去重
 - 转为 UnifiedDocument
 
-微信数据结构变化时，只替换 Adapter，不改核心知识链路。
+macOS 与 Windows 只是 Favorites Auto Sync Adapter 的平台实现。微信数据结构变化或平台 POC 失败时，只替换相应 Adapter，不改核心知识链路。
 
 ### 3.2 PDF Adapter
 
@@ -349,10 +364,12 @@ flowchart TD
     Core --> Mac[macOS Platform Adapters]
     Core --> Win[Windows Platform Adapters]
 
-    Mac --> MacWechat[WeChat macOS]
+    Core --> ManualWechat[Manual WeChat Article Adapter]
+
+    Mac --> MacWechat[WeChat Favorites macOS BLOCKED]
     Mac --> MacScheduler[macOS Scheduler]
 
-    Win --> WinWechat[WeChat Windows Future]
+    Win --> WinWechat[WeChat Favorites Windows POC]
     Win --> WinScheduler[Windows Scheduler]
 ```
 
@@ -368,9 +385,9 @@ flowchart TD
 
 ## 14. 微信的架构位置
 
-微信同步是高风险外围能力：
+Manual WeChat Article Adapter 是 V1 稳定输入。Favorites Auto Sync 是高风险外围能力：
 
-WeChat Adapter Failure ≠ Knowledge Base Failure
+Favorites Auto Sync Failure ≠ Knowledge Base Failure
 
 即使微信同步暂时失败：
 

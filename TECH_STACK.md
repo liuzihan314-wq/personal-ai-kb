@@ -181,7 +181,8 @@ V1 使用 Typer。
 ```bash
 pkb import-pdf xxx.pdf
 pkb add-idea
-pkb sync-wechat
+pkb import-wechat-article
+pkb sync-wechat  # Experimental / POC
 pkb search "AI视频"
 pkb generate-topics
 pkb write-script
@@ -246,11 +247,24 @@ V1 不上 Vector DB。
 
 ---
 
-## 11. 微信 POC
+## 11. 微信输入
 
-状态：`POC_REQUIRED`
+### Manual WeChat Article Import
 
-目标只验证：
+状态：V1 MUST HAVE。
+
+- Web UI 与 CLI 共用 Core Service
+- 仅允许微信公众号文章 URL
+- 自动提取失败时允许标题、正文和原始 URL 手动提交
+- 输出既有 UnifiedDocument，并写入 immutable Raw
+- 不为该入口修改 Notes / Knowledge / Index / Retrieval 公共接口
+
+### Favorites Auto Sync
+
+- macOS：`BLOCKED POC`
+- Windows：`POC CANDIDATE / NOT VERIFIED`
+
+POC 只验证：
 
 1. macOS 能否稳定读取收藏新增
 2. 能否识别微信公众号文章
@@ -259,7 +273,7 @@ V1 不上 Vector DB。
 5. 能否过滤视频与普通 URL
 6. 微信升级 / 重启后的稳定性
 
-微信 Adapter 必须与 Core 解耦。
+Manual 与 Favorites Adapter 都必须与 Core 解耦。Favorites POC 失败不能阻塞 V1。
 
 ---
 
@@ -269,7 +283,8 @@ V1 不上 Vector DB。
 
 - 当前主开发
 - 当前主运行
-- 首先实现 WeChat macOS POC
+- Manual WeChat Article Import 是 V1 稳定入口
+- WeChat macOS Favorites POC 当前为 `BLOCKED`
 - 定时任务使用 launchd
 
 ### Windows
@@ -277,7 +292,7 @@ V1 不上 Vector DB。
 - 备用运行
 - Core 需要避免无必要的 macOS 专属代码
 - Scheduler 通过 Windows adapter 接 Task Scheduler
-- Windows WeChat Adapter 属后续功能
+- Windows WeChat Favorites Adapter 属后续 POC，当前未验证
 - 不为 OS 建长期 Git 分支
 
 ---
@@ -348,7 +363,7 @@ data/logs/
 - `feat/script-writer`
 - `feat/wechat-macos`
 - `feat/web-ui`
-- future `feat/wechat-windows`
+- 任务期间可使用短期 `poc/wechat-windows`
 
 并行 Worker 修改代码时，使用独立 worktree。
 
@@ -376,8 +391,8 @@ data/logs/
 - Retrieval
 - Topics
 - Script
-- 微信白名单过滤
-- 去重
+- Manual WeChat Article URL 白名单、Raw immutable 与去重
+- Favorites POC 的真实公众号文章、视频和普通 URL 分类证据
 - macOS / Windows 路径兼容的核心 smoke test
 
 ---

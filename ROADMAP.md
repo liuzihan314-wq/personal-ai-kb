@@ -42,7 +42,7 @@ flowchart TD
     M2[M2 AI Notes]
     M3[M3 Retrieval & Knowledge]
     M4[M4 Content Creation]
-    M5[M5 WeChat macOS POC]
+    M5[M5 WeChat Input and Favorites POC]
     M6[M6 Web UI]
     M7[M7 Cross-platform Hardening]
 
@@ -52,7 +52,7 @@ flowchart TD
     M3 --> M4
     M1 --> M5
     M4 --> M6
-    M5 --> M6
+    M5 -.Favorites POC 非阻塞.-> M6
     M6 --> M7
 ```
 
@@ -419,15 +419,15 @@ Acceptance:
 
 ---
 
-# M5 — WeChat macOS POC
+# M5 — WeChat Input and Favorites POC
 
 ## TASK-013 — macOS WeChat Favorites Feasibility POC
 
-Status: POC_REQUIRED
+Status: BLOCKED
 Dependencies: TASK-002  
-Suggested branch: `poc/wechat-macos`
+Suggested branch: `poc/task-013-wechat-macos`
 
-Progress: synthetic metadata classification and filtering tests pass (6 passed), including video, video-account and ordinary-URL rejection. The actual POC acceptance remains unverified: no official export/sync capability evidence and no safe real-client observation has established incremental discovery, account classification, metadata/content availability, duplicate behavior, or restart behavior. Do not merge this partial branch as a completed POC.
+Progress: 2026-09-15 MAIN accepted the POC as technically BLOCKED, not functionally complete. Synthetic metadata classification and filtering tests pass (8 POC tests), and real read-only observation confirmed that `favorite.db` / `favorite_fts.db` change after collection activity. The files have no standard SQLite header and cannot be opened by SQLite read-only mode. No safe real-client evidence established item enumeration, official-account classification, title/body/source extraction, stable item identity, deduplication, real video/URL filtering, or restart-safe synchronization. Current runnable macOS 4.x references require database unlock, copied snapshots, process key capture, SIP/debug permissions, or content-level UI capture; those operations remain outside the approved boundary. Do not merge this branch as a completed sync solution or enter TASK-014.
 
 Important:
 
@@ -463,10 +463,10 @@ Failure rule:
 
 ---
 
-## TASK-014 — WeChat Adapter Productionization
+## TASK-014 — macOS Favorites Auto Sync Productionization
 
 Status: BLOCKED  
-Dependencies: TASK-013 PASS, TASK-003/004 input foundation stable  
+Dependencies: TASK-013 PASS, TASK-003, TASK-004（input foundation stable）
 Suggested branch: `feat/wechat-macos`
 
 Acceptance:
@@ -480,7 +480,7 @@ Acceptance:
 
 ---
 
-## TASK-015 — macOS Scheduler
+## TASK-015 — macOS Favorites Scheduler
 
 Status: BLOCKED  
 Dependencies: TASK-014  
@@ -502,6 +502,50 @@ Acceptance:
 ---
 
 # M6 — Web UI
+
+## TASK-026 — Manual WeChat Article Import
+
+Status: READY
+Dependencies: TASK-003, TASK-016
+Suggested branch: `feat/manual-wechat-article`
+
+Goal:
+
+为 V1 提供可靠的微信公众号文章输入入口，不依赖微信收藏数据库。
+
+Scope:
+
+- Web UI 与 CLI 共用同一 Core Service
+- 仅接受明确的微信公众号文章 URL
+- 自动提取成功时生成既有 UnifiedDocument
+- 自动提取失败时返回 `manual_required`，允许用户补充标题、正文和原始 URL
+- 使用 `content_type=article`、`source_type=wechat` 和 metadata 中的 manual ingest 标记
+- 仅对 RawStorage 增加向后兼容的 article 文本路径支持，保持现有 `store` / `load_document` / `paths_for` 调用契约及 PDF / Idea 路径不变
+- Raw immutable、重复导入幂等
+
+Not in scope:
+
+- 修改 UnifiedDocument、Notes、Knowledge、Index、Retrieval 或 Provider 公共接口
+- macOS / Windows Favorites 自动同步
+- 普通网页、视频、视频号、短链接或其他微信内容导入
+- Cookie、登录态、代理证书、OCR 或数据库解密
+
+Acceptance:
+
+1. 接受合法 `https://mp.weixin.qq.com/s/...` 文章 URL
+2. 拒绝普通网页 URL、视频号及其他不受支持的微信链接，且不产生 Raw
+3. 自动提取成功时生成现有 UnifiedDocument；失败时不写残缺 Raw，并明确要求手动正文
+4. 用户提交非空标题、正文和原始公众号 URL 后可完成导入
+5. article 使用文本型 Raw 保存，重启后可读取，且不改变现有 PDF / Idea 存储行为
+6. 同一规范化 URL 重复导入不新增、不覆盖原 Raw
+7. 成功导入可继续生成 Note 并更新 Index
+8. UI 与 CLI 不复制解析、白名单或去重逻辑
+9. 使用一篇真实公众号文章完成最小端到端验收
+10. 真实正文、Cookie、凭据和私人数据不进入测试、日志或 Git
+11. 手动导入失败不影响 PDF、Idea、Notes、Knowledge、Retrieval、Topics 或 Script
+12. 全量回归测试通过
+
+---
 
 ## TASK-016 — Streamlit MVP
 
@@ -651,8 +695,10 @@ Acceptance:
 ## TASK-017 — Windows Core Smoke Test
 
 Status: BLOCKED  
-Dependencies: M4 core loop stable  
+Dependencies: TASK-010, TASK-011, TASK-012（M4 core loop stable）
 Suggested branch: `chore/windows-compat`
+
+Progress: Core loop dependencies are complete. The task remains BLOCKED because no real Windows 10/11 environment is currently available for install, path, encoding and runtime validation.
 
 Scope:
 
@@ -678,23 +724,37 @@ Acceptance:
 
 ---
 
-## TASK-018 — Windows Scheduler Adapter
+## TASK-019 — Windows WeChat Favorites POC
 
 Status: BACKLOG  
 Dependencies: TASK-017
 
-使用 Windows Task Scheduler 适配定时任务。
+使用 Windows 10/11、已登录的微信 4.x 和三条真实收藏完成独立可行性验证：
+
+```text
+微信公众号文章 → ARTICLE → IMPORT
+视频 / 视频号 → VIDEO → IGNORE
+普通网页 URL → URL → IGNORE
+```
+
+Acceptance:
+
+- 公众号文章可取得标题、正文和来源，并转换为现有 UnifiedDocument 后写入 Raw
+- 第二次运行不重复导入，微信重启后再次运行仍不重复
+- 视频、视频号和普通网页 URL 不进入知识库
+- Adapter 故障不影响 PDF、Idea、Notes、Knowledge、Retrieval、Topics 或 Script
+- 候选工具和命令必须通过真实源码、版本与本机运行证据验证，不得把搜索结果当作完成方案
+
+不得为它维护一套长期 Windows branch。
 
 ---
 
-## TASK-019 — Windows WeChat Adapter
+## TASK-018 — Windows Scheduler Adapter
 
 Status: BACKLOG  
-Dependencies: TASK-017
+Dependencies: TASK-017, TASK-019 PASS
 
-未来独立实现。
-
-不得为它维护一套长期 Windows branch。
+在 Windows Favorites POC 真实通过后，使用 Windows Task Scheduler 适配定时任务。
 
 ---
 
@@ -733,18 +793,24 @@ Acceptance:
 
 ---
 
-# 4. 推荐首轮并行策略
+# 4. 当前调度策略
 
-TASK-002 完成后：
+当前可以推进：
 
-可以并行：
+- TASK-026 Manual WeChat Article Import：依赖已完成，可派发
+- TASK-017 Windows Core Smoke Test：仅在真实 Windows 10/11 环境可用后派发
 
-- Worker A → TASK-003 PDF
-- Worker B → TASK-004 Idea Card
-- Worker C → TASK-005 AI Provider
-- Worker D → TASK-013 WeChat macOS POC（独立风险探索）
+必须串行：
 
-主链不要等待 WeChat POC 才继续。
+- TASK-017 PASS → TASK-019 Windows WeChat Favorites POC
+- TASK-019 PASS → TASK-018 Windows Scheduler Adapter
+
+继续阻塞：
+
+- TASK-013 当前安全边界下不再重复派发
+- TASK-014 / TASK-015 等待 TASK-013 真实 PASS
+
+Manual WeChat Article Import 是 V1 主线；Favorites 自动同步 POC 不阻塞核心知识库。
 
 ---
 
