@@ -1,7 +1,9 @@
 """Application settings loaded from environment variables and ``.env``."""
 
 from functools import lru_cache
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,6 +30,9 @@ class Settings(BaseSettings):
     ai_model: str | None = None
     ai_base_url: str | None = None
     ai_api_key: SecretStr | None = Field(default=None, repr=False)
+    embedding_model: str | None = None
+    embedding_base_url: str | None = None
+    embedding_api_key: SecretStr | None = Field(default=None, repr=False)
 
     @property
     def raw_dir(self) -> Path:
@@ -84,3 +89,44 @@ def get_settings() -> Settings:
     """Return the process-level settings instance."""
 
     return Settings()
+
+
+def save_local_settings(values: dict[str, str], env_path: Path = Path(".env")) -> None:
+    """Persist approved local settings without exposing their values in logs.
+
+    Existing comments and unrelated settings are preserved. This file is local
+    only: ``.gitignore`` excludes it from version control.
+    """
+
+    if not values:
+        return
+    for key, value in values.items():
+        if not key.startswith("PKB_") or "\n" in value or "\r" in value:
+            raise ValueError("配置项格式无效")
+
+    existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    pending = dict(values)
+    lines: list[str] = []
+    for line in existing.splitlines():
+        key, separator, _value = line.partition("=")
+        normalized_key = key.removeprefix("export ").strip()
+        if separator and normalized_key in pending:
+            lines.append(f"{normalized_key}={pending.pop(normalized_key)}")
+        else:
+            lines.append(line)
+    lines.extend(f"{key}={value}" for key, value in pending.items())
+    content = "\n".join(lines) + "\n"
+
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=env_path.parent,
+        prefix=".env.",
+        delete=False,
+    ) as temporary:
+        temporary.write(content)
+        temporary_path = Path(temporary.name)
+    os.chmod(temporary_path, 0o600)
+    temporary_path.replace(env_path)
+    get_settings.cache_clear()

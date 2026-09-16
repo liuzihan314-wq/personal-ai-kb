@@ -33,6 +33,9 @@ from pkb.scripts import ScriptResult, ScriptWriter
 from pkb.topics import TopicCandidate, TopicGenerationResult, TopicGenerator
 
 
+_EMBEDDING_UNSET = object()
+
+
 @dataclass(frozen=True)
 class UIPaths:
     """The local directories used by the Streamlit entry point."""
@@ -103,13 +106,39 @@ class UIService:
         paths: UIPaths | None = None,
         *,
         provider: AIProvider | None = None,
-        embedding_client: EmbeddingClient | None = None,
+        embedding_client: EmbeddingClient | None | object = _EMBEDDING_UNSET,
     ) -> None:
         self.paths = paths or UIPaths.from_settings()
         # Core services keep MockAIProvider for deterministic unit tests.  The
         # user-facing UI must never present that fixture text as an AI answer.
         self.provider = provider if provider is not None else configured_provider()
-        self.embedding_client = embedding_client
+        # An injected Provider/Embedding client is an explicit composition
+        # choice.  Do not silently supplement it with this machine's .env.
+        # The normal app path leaves both unset and therefore loads local
+        # embedding configuration automatically.
+        if embedding_client is _EMBEDDING_UNSET:
+            self.embedding_client = (
+                self._configured_embedding_client() if provider is None else None
+            )
+        else:
+            self.embedding_client = embedding_client
+
+    @staticmethod
+    def _configured_embedding_client() -> EmbeddingClient | None:
+        """Load the local embedding configuration without using process env vars."""
+
+        settings = get_settings()
+        api_key = (
+            settings.embedding_api_key.get_secret_value()
+            if settings.embedding_api_key
+            else ""
+        )
+        values = (settings.embedding_model or "", settings.embedding_base_url or "", api_key)
+        if not all(value.strip() for value in values):
+            return None
+        return DashScopeEmbeddingClient(
+            model=values[0], base_url=values[1], api_key=values[2]
+        )
 
     @classmethod
     def with_session_provider(
@@ -233,16 +262,28 @@ class UIService:
             provider=self.provider,
         ).import_article(source_url, title=title, content=content)
 
-    def search(self, query: str, *, limit: int = 10) -> RetrievalResult:
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        include_embeddings: bool = True,
+    ) -> RetrievalResult:
         """Search the current local Index."""
 
         return RetrievalService(self.paths.index_path).search(
             query,
             limit=limit,
-            embedding_client=self.embedding_client,
+            embedding_client=self.embedding_client if include_embeddings else None,
         )
 
-    def answer(self, question: str, *, limit: int = 10) -> QAResult:
+    def answer(
+        self,
+        question: str,
+        *,
+        limit: int = 10,
+        include_embeddings: bool = True,
+    ) -> QAResult:
         """Answer from the local Knowledge, Notes, and Raw stores."""
 
         return QAService(
@@ -251,7 +292,7 @@ class UIService:
             notes_dir=self.paths.notes_dir,
             raw_dir=self.paths.raw_dir,
             provider=self.provider,
-            embedding_client=self.embedding_client,
+            embedding_client=self.embedding_client if include_embeddings else None,
         ).answer(question, limit=limit)
 
     def synthesize_topic(self, topic: str) -> KnowledgeRecord:

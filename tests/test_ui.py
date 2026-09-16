@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pymupdf
 
@@ -24,6 +25,47 @@ def _make_pdf(text: str) -> bytes:
     payload = document.tobytes()
     document.close()
     return payload
+
+
+def test_translation_guard_marks_parent_page_as_chinese_and_notranslate(monkeypatch):
+    from pkb.ui import app as ui_app
+
+    captured = {}
+    monkeypatch.setattr(
+        ui_app.components,
+        "html",
+        lambda body, **options: captured.update(body=body, options=options),
+    )
+
+    ui_app._install_translation_guard()
+
+    assert 'root.lang = "zh-CN"' in captured["body"]
+    assert 'root.setAttribute("translate", "no")' in captured["body"]
+    assert 'meta.content = "notranslate"' in captured["body"]
+    assert captured["options"] == {"height": 0, "width": 0}
+
+
+def test_source_helpers_expose_web_originals_and_local_raw_files(tmp_path):
+    from pkb.ui.app import _source_raw_path, _source_web_url
+
+    web_source = SimpleNamespace(
+        kind="note",
+        source_id="wechat-1",
+        reference="https://mp.weixin.qq.com/s/example",
+        path="data/notes/wechat-1.md",
+    )
+    pdf_source = SimpleNamespace(
+        kind="note",
+        source_id="pdf-1",
+        reference="raw:pdf-1",
+        path="data/notes/pdf-1.md",
+    )
+    original = tmp_path / "pdf-1" / "original.pdf"
+    original.parent.mkdir()
+    original.write_bytes(b"%PDF-test")
+
+    assert _source_web_url(web_source) == "https://mp.weixin.qq.com/s/example"
+    assert _source_raw_path(pdf_source, tmp_path) == original
 
 
 def _seed_script_library(data_dir: Path) -> TopicCandidate:

@@ -13,6 +13,7 @@ vertical slice useful without a network or a real model.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import TypeAlias
 
 from pkb.config import get_settings
@@ -60,9 +61,51 @@ KnowledgeInput: TypeAlias = TopicKnowledge | KnowledgeRecord | str | Path
 SelectionInput: TypeAlias = TopicCandidate | ScriptSelection | str
 
 DEFAULT_LIMIT = 10
-MIN_SCRIPT_CHARS = 320
-MAX_SCRIPT_CHARS = 650
-TARGET_SECONDS = 150
+MIN_SCRIPT_CHARS = 650
+MAX_SCRIPT_CHARS = 900
+TARGET_SECONDS = 180
+FORBIDDEN_SCRIPT_MARKERS = (
+    "来源一",
+    "来源二",
+    "来源三",
+    "来源 1",
+    "来源 2",
+    "来源 3",
+    "Raw",
+    "Note",
+    "Knowledge",
+    "本地 Index",
+    "本地检索",
+    "根据资料",
+    "根据文档",
+    "原始文章",
+    "原始内容",
+    "本地来源",
+    "当前综合",
+    "来源链",
+    "二次检索",
+    "可读取",
+)
+
+_SCRIPT_MARKER_REPLACEMENTS = {
+    "来源一": "这部分内容",
+    "来源二": "这部分内容",
+    "来源三": "这部分内容",
+    "来源 1": "这部分内容",
+    "来源 2": "这部分内容",
+    "来源 3": "这部分内容",
+    "本地 Index": "检索结果",
+    "本地检索": "检索结果",
+    "根据资料": "结合已知内容",
+    "根据文档": "结合已知内容",
+    "原始文章": "这件事",
+    "原始内容": "具体内容",
+    "本地来源": "现有内容",
+    "当前综合": "核心结论",
+    "来源链": "相关内容",
+    "二次检索": "再次梳理",
+    "可读取": "能确认",
+}
 
 
 @dataclass(frozen=True)
@@ -710,53 +753,53 @@ class _ScriptWriterCore:
         topic_label = _excerpt(topic, limit=48)
         paragraphs = [
             (
-                f"今天聊“{topic_label}”。这是刚刚重新查本地 Index 的结果："
-                f"找到 {len(retrieval.candidates)} 条相关记录，并把能读取的 Knowledge、Note 和 Raw 对回去。"
+                f"很多人一听到“{topic_label}”，第一反应就是先找一个最强的工具。"
+                "但真正决定结果的，往往不是工具名单，而是你有没有把目标、步骤和判断标准想清楚。"
+                "接下来我们不绕概念，直接把这件事拆成能理解、能执行的几个关键点。"
             )
         ]
 
         if knowledge:
             lead = knowledge[0].knowledge
             paragraphs.append(
-                f"先看主题页“{_excerpt(lead.topic, limit=42)}”。它留下的当前综合是："
-                f"“{_excerpt(lead.current_synthesis, limit=88)}”这是一条可以继续核对的内容主线："
-                "先看资料具体写了什么，再看它适用的场景和边界。"
+                f"先抓住主线：{_excerpt(lead.current_synthesis, limit=150)}"
+                "别急着把所有方法一次塞进去，先判断自己现在要解决的具体场景，"
+                "再决定哪些步骤必须保留，哪些环节可以暂时放下。"
             )
         elif notes:
             paragraphs.append(
-                "这次没有读到匹配的 Topic Knowledge，所以先以重新检索到的 Notes 为准；"
-                "下面的判断只覆盖这些本地材料明确留下的内容。"
+                "先把范围说清楚：我们只讨论已经能够确认的做法。"
+                "你可以先拿一个真实任务跑通最小闭环，再逐步增加工具和复杂度。"
             )
 
         note_details: list[str] = []
-        for index, resolved in enumerate(notes[:2]):
+        transitions = ("第一个关键点是", "接着看第二个关键点", "再往下，还有一个容易忽略的地方", "最后补一个落地判断")
+        for index, resolved in enumerate(notes[:4]):
             if resolved.note is None:
                 continue
             note = resolved.note
             detail = (
-                f"“{_excerpt(note.title, limit=36)}”的 Note 明确写到："
-                f"{_excerpt(note.summary, limit=70)}"
+                f"{transitions[index]}：{_excerpt(note.summary, limit=115)}"
             )
+            if note.key_points:
+                detail += f"落到行动上，你可以先做这一步：{_excerpt(note.key_points[0], limit=85)}"
             if index == 0 and note.quotes:
-                detail += f"原话是“{_excerpt(note.quotes[0], limit=34)}”。"
-            elif note.key_points:
-                detail += f"落到动作上是：{_excerpt(note.key_points[0], limit=48)}"
-            else:
-                detail += "这部分只采用 Note 已保存的内容。"
+                detail += f"有一句话很适合记住：{_excerpt(note.quotes[0], limit=55)}"
             note_details.append(detail)
         if note_details:
             paragraphs.append("\n".join(note_details))
 
         for material in raw_materials[:1]:
             paragraphs.append(
-                f"我还回到 Raw“{_excerpt(material.title, limit=36)}”核对，"
-                f"原始内容能确认的是：{_excerpt(material.content, limit=76)}"
+                "如果你想把它真正做出来，还要留意这个细节："
+                f"{_excerpt(material.content, limit=145)}"
+                "先用一个小样验证，再根据实际效果调整，比一开始追求完整更稳。"
             )
 
         paragraphs.append(
-            "所以，这个选题值得讲的不是再说一句“AI 很重要”，而是把材料里的对象、动作和限制讲清楚。"
-            "如果把它录成口播，我会按“场景—做法—边界”收束：有来源的地方按来源说，没有来源的地方留白，"
-            "让听众拿到一条可以回查、也可以继续验证的线索。"
+            "所以，真正值得带走的不是又记住几个名词，而是形成一个顺序：先明确你要解决的问题，"
+            "再跑通最小步骤，然后用结果决定下一步。别让工具替你做判断，也别让复杂流程拖住第一次行动。"
+            "今天就挑一个最具体的场景试一次，做完再优化，你会比继续收藏一堆方法更快看到变化。"
         )
         return _fit_script(paragraphs)
 
@@ -764,17 +807,25 @@ class _ScriptWriterCore:
 def _fit_script(paragraphs: Sequence[str]) -> str:
     """Keep the deterministic fallback in the requested spoken-length band."""
 
-    cleaned = [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
+    cleaned = [
+        _sanitize_script_text(paragraph).strip()
+        for paragraph in paragraphs
+        if paragraph.strip()
+    ]
     if not cleaned:
         return ""
     script = "\n\n".join(cleaned)
     if len(script) < MIN_SCRIPT_CHARS:
         script += (
-            "\n\n这次也要保留证据边界：有来源的地方按来源说，没有来源的地方不替它补结论；"
-            "后续若新增 Note 或 Raw，只需要沿着上面的来源继续复核。"
+            "\n\n还有一个很实际的提醒：第一次尝试时，不要同时追求速度、质量和复杂度。"
+            "先确定一个最重要的结果，把流程完整走一遍，记录哪里最耗时间、哪里最容易返工。"
+            "第二次只改最影响结果的那个环节。这样每轮都有明确反馈，方法才会慢慢变成你自己的能力。"
         )
     if len(script) < MIN_SCRIPT_CHARS:
-        script += " 这就是本次本地检索能够支持的最小判断范围。"
+        script += (
+            " 你不需要一次做到完美，先把第一版做出来，再用真实结果校准下一步。"
+            "能重复、能复盘、能继续改，才是一套真正有用的方法。"
+        )
     if len(script) <= MAX_SCRIPT_CHARS:
         return script
 
@@ -791,6 +842,33 @@ def _fit_script(paragraphs: Sequence[str]) -> str:
         middle += "…"
         return f"{head}\n\n{middle}\n\n{tail}"
     return f"{head}\n\n{tail}"
+
+
+def _sanitize_script_text(text: str) -> str:
+    """Remove knowledge-base implementation labels from publishable copy."""
+
+    cleaned = text
+    for marker, replacement in _SCRIPT_MARKER_REPLACEMENTS.items():
+        cleaned = cleaned.replace(marker, replacement)
+    cleaned = re.sub(r"(?<!\w)#+\s*", "", cleaned)
+    return re.sub(r"\b(?:raw|note|knowledge)\b", "材料", cleaned, flags=re.IGNORECASE)
+
+
+def _make_script_title(topic: str) -> str:
+    """Create a publishable, curiosity-driven title from the confirmed topic."""
+
+    clean_topic = _sanitize_script_text(_excerpt(topic, limit=42)).strip("「」\"“”")
+    return f"为什么学了很多 AI 还是用不起来？从「{clean_topic}」开始把判断变成执行"
+
+
+def _has_spoken_hook(text: str) -> bool:
+    """Require an audience-facing opening before accepting provider copy."""
+
+    opening = text[:180]
+    return (
+        opening.startswith(("很多人", "你有没有", "为什么", "别再", "真正", "做"))
+        or any(token in opening for token in ("？", "！", "最没用", "问题不在", "关键是"))
+    )
 
 
 class ScriptWriter(_ScriptWriterCore):
@@ -817,7 +895,15 @@ class ScriptWriter(_ScriptWriterCore):
             ) from exc
         if isinstance(generated, str) and generated.strip():
             candidate = generated.strip()
-            if MIN_SCRIPT_CHARS <= len(candidate) <= MAX_SCRIPT_CHARS:
+            has_internal_markers = any(
+                marker.casefold() in candidate.casefold()
+                for marker in FORBIDDEN_SCRIPT_MARKERS
+            )
+            if (
+                MIN_SCRIPT_CHARS <= len(candidate) <= MAX_SCRIPT_CHARS
+                and not has_internal_markers
+                and _has_spoken_hook(candidate)
+            ):
                 return candidate
         return self._fallback_script(topic, retrieval, knowledge, notes, raw_materials)
 
@@ -959,6 +1045,7 @@ class ScriptWriter(_ScriptWriterCore):
         )
         return ScriptResult(
             topic=topic_text,
+            title=_make_script_title(topic_text),
             status="generated",
             selection_confirmed=True,
             selection=selection,

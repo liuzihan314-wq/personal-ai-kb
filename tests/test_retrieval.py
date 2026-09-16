@@ -314,3 +314,22 @@ def test_embedding_client_uses_dashscope_openai_compatible_request_shape():
         "model": "qwen3.7-text-embedding-flash",
         "input": ["first", "second"],
     }
+
+
+def test_embedding_client_accepts_dashscope_batch_items_with_zero_indexes():
+    def transport(_url, _headers, _body):
+        return {
+            "data": [
+                {"index": 0, "embedding": [1.0, 0.0]},
+                {"index": 0, "embedding": [0.0, 1.0]},
+            ],
+        }
+
+    client = DashScopeEmbeddingClient(
+        model="qwen3.7-text-embedding-flash",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key="unit-test-key",
+        transport=transport,
+    )
+
+    assert client.embed(["first", "second"]) == [(1.0, 0.0), (0.0, 1.0)]

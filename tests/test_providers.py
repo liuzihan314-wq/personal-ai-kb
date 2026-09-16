@@ -1,3 +1,6 @@
+import json
+import ssl
+
 from pkb.config import Settings
 from pkb.providers import (
     AIProvider,
@@ -8,6 +11,7 @@ from pkb.providers import (
     configured_provider,
     provider_from_values,
 )
+from pkb.providers import openai_compatible
 
 
 def test_mock_provider_implements_protocol_and_supports_summary_call():
@@ -62,6 +66,69 @@ def test_configured_provider_uses_openai_compatible_chat_completions_contract():
     assert captured["headers"]["Authorization"] == "Bearer test-key"
     assert captured["body"]["model"] == "deepseek-test"
     assert captured["body"]["stream"] is False
+
+
+def test_script_prompt_requests_publishable_spoken_copy_without_source_labels():
+    captured: dict[str, object] = {}
+
+    def transport(url, headers, body):
+        captured.update(url=url, headers=headers, body=body)
+        return {"choices": [{"message": {"content": "可直接录制的口播稿"}}]}
+
+    provider = OpenAICompatibleProvider(
+        model="deepseek-test",
+        base_url="https://api.example.test/v1",
+        api_key="test-key",
+        transport=transport,
+    )
+
+    provider.write_script(
+        "AI 视频",
+        [ProviderDocument(document_id="doc-1", title="视频路线", content="先拆流程。")],
+        target_seconds=180,
+    )
+
+    messages = captured["body"]["messages"]
+    system = messages[0]["content"]
+    prompt = messages[1]["content"]
+    assert "中文自媒体口播编剧" in system
+    assert "开头两句话必须有钩子" in system
+    assert "700 到 900 个中文字符" in system
+    assert "禁止出现" in system
+    assert "[来源 1" not in prompt
+    assert "【视频路线】" in prompt
+
+
+def test_provider_default_transport_uses_certifi_tls_context(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+
+    def fake_urlopen(request, *, timeout, context):
+        captured["request"] = request
+        captured["timeout"] = timeout
+        captured["context"] = context
+        return Response()
+
+    monkeypatch.setattr(openai_compatible, "urlopen", fake_urlopen)
+    provider = OpenAICompatibleProvider(
+        model="test-model",
+        base_url="https://api.example.test/v1",
+        api_key="test-key",
+    )
+
+    assert provider.answer_question("question") == "ok"
+    assert isinstance(captured["context"], ssl.SSLContext)
+    assert captured["context"].verify_mode == ssl.CERT_REQUIRED
+    assert captured["context"].check_hostname
 
 
 def test_provider_selection_never_falls_back_to_mock_when_configuration_is_absent():

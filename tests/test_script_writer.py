@@ -177,11 +177,18 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
     assert result.status == "generated"
     assert result.selection_confirmed is True
     assert result.selection.confirmed is True
+    assert result.title
+    assert result.title.startswith("为什么学了很多 AI 还是用不起来")
     assert result.retrieval.status == "ok"
     assert MIN_SCRIPT_CHARS <= len(result.script_text) <= MAX_SCRIPT_CHARS
     assert "AI 工作流" in result.script_text
     assert "把 AI 工具组合成可复用的效率流程" in result.script_text
     assert "先把任务拆成流程，再决定工具。" in result.script_text
+    assert result.script_text.startswith("很多人")
+    assert not any(
+        marker in result.script_text
+        for marker in ("来源一", "来源二", "来源三", "Raw", "Note", "Knowledge", "本地检索")
+    )
     assert {source.kind for source in result.sources} == {"knowledge", "note", "raw"}
     assert {item.source_kind for item in result.evidence} == {
         "knowledge",
@@ -191,6 +198,57 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
     assert provider.calls == ["write_script", "write_script"]
     assert retrieval.queries == [candidate.title, candidate.title]
     assert second.retrieval is not result.retrieval
+
+
+def test_fallback_script_sanitizes_internal_source_labels(tmp_path):
+    notes = [
+        _note(
+            "internal-labels",
+            "AI 视频工作流",
+            "来源一 Raw 内容来自 Note，Knowledge 只作内部整理，原始文章字段不应出现。",
+        )
+    ]
+    knowledge = _knowledge(notes)
+    raw_dir = tmp_path / "raw"
+    document = UnifiedDocument(
+        id=notes[0].document_id,
+        content_type="idea",
+        title=notes[0].title,
+        content=notes[0].original_content or notes[0].summary,
+        source_type="manual",
+    )
+    RawStorage(raw_dir).store(document, document.content.encode("utf-8"))
+    result = ScriptWriter(
+        index=_index(notes),
+        knowledge=[knowledge],
+        notes=notes,
+        raw_dir=raw_dir,
+        provider=MockAIProvider(),
+    ).write(notes[0].title, confirmed=True)
+
+    assert not any(
+        marker.casefold() in result.script_text.casefold()
+        for marker in ("来源一", "Raw", "Note", "Knowledge", "原始文章")
+    )
+
+
+def test_provider_copy_without_hook_falls_back_to_publishable_script(tmp_path):
+    notes, knowledge, _candidate, raw_dir = _fixed_library(tmp_path)
+
+    class WeakProvider(MockAIProvider):
+        def write_script(self, topic, context=(), *, target_seconds=150):
+            return "这里是一个没有开头钩子的说明。" * 120
+
+    result = ScriptWriter(
+        index=_index(notes),
+        knowledge=[knowledge],
+        notes=notes,
+        raw_dir=raw_dir,
+        provider=WeakProvider(),
+    ).write(notes[0].title, confirmed=True)
+
+    assert result.script_text.startswith("很多人")
+    assert MIN_SCRIPT_CHARS <= len(result.script_text) <= MAX_SCRIPT_CHARS
 
 
 def test_index_hit_without_readable_evidence_is_explicit(tmp_path):

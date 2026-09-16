@@ -2,10 +2,15 @@
 
 from collections.abc import Sequence
 from html import escape
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import streamlit as st
+import streamlit.components.v1 as components
 
+from pkb.config import get_settings, save_local_settings
+from pkb.retrieval import EmbeddingRequestError
 from pkb.ui.services import (
     IngestResult,
     UIService,
@@ -42,6 +47,14 @@ _INGEST_INVALIDATED_STATE = (
 def _init_state() -> None:
     for key, value in _STATE_DEFAULTS.items():
         st.session_state.setdefault(key, value)
+    # Drop a pre-title generated result kept by an older Streamlit session.
+    # Otherwise the page can continue displaying the obsolete retrieval-style copy.
+    script_result = st.session_state.get("script_result")
+    if (
+        getattr(script_result, "status", None) == "generated"
+        and not hasattr(script_result, "title")
+    ):
+        st.session_state["script_result"] = None
 
 
 def _invalidate_results_after_ingest(state: Any) -> None:
@@ -65,6 +78,37 @@ def _html(value: object) -> str:
 
 def _render_theme() -> None:
     st.markdown(THEME_CSS, unsafe_allow_html=True)
+
+
+def _install_translation_guard() -> None:
+    """Prevent browser translation from mutating Streamlit's React DOM."""
+
+    components.html(
+        """
+        <script>
+        (() => {
+          try {
+            const doc = window.parent.document;
+            const root = doc.documentElement;
+            root.lang = "zh-CN";
+            root.setAttribute("translate", "no");
+            root.classList.add("notranslate");
+            let meta = doc.head.querySelector('meta[name="google"]');
+            if (!meta) {
+              meta = doc.createElement("meta");
+              meta.name = "google";
+              doc.head.appendChild(meta);
+            }
+            meta.content = "notranslate";
+          } catch (_error) {
+            // The app remains usable if a browser blocks parent-frame access.
+          }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def _render_brand_header() -> None:
@@ -146,12 +190,46 @@ def _embedding_session_values() -> dict[str, str] | None:
     return {key: values[key] for key in required}
 
 
-def _render_provider_configuration() -> None:
-    """Render a session-only credential form without exposing the API key."""
+def _saved_provider_values() -> dict[str, str] | None:
+    """Return local Provider settings for pre-filling non-secret fields."""
 
-    current = _provider_session_values() or {}
+    settings = get_settings()
+    api_key = settings.ai_api_key.get_secret_value() if settings.ai_api_key else ""
+    values = {
+        "provider_name": settings.ai_provider or "",
+        "model": settings.ai_model or "",
+        "base_url": settings.ai_base_url or "",
+        "api_key": api_key,
+    }
+    return values if all(values.values()) else None
+
+
+def _saved_embedding_values() -> dict[str, str] | None:
+    """Return local Embedding settings for pre-filling non-secret fields."""
+
+    settings = get_settings()
+    api_key = (
+        settings.embedding_api_key.get_secret_value()
+        if settings.embedding_api_key
+        else ""
+    )
+    values = {
+        "embedding_model": settings.embedding_model or "",
+        "embedding_base_url": settings.embedding_base_url or "",
+        "embedding_api_key": api_key,
+    }
+    return values if all(values.values()) else None
+
+
+def _render_provider_configuration() -> None:
+    """Render the local Provider configuration form without exposing its key."""
+
+    current = _provider_session_values() or _saved_provider_values() or {}
+    saved = _saved_provider_values() is not None
     with st.expander("AI 服务设置", expanded=not bool(current)):
-        st.caption("仅在当前浏览器会话中临时保存；刷新或关闭页面后需重新填写。不会写入本地 .env 文件。")
+        if saved:
+            st.success("已从本机 .env 加载。重启电脑或关闭网页后仍会自动使用。")
+        st.caption("保存后写入本项目根目录的本机 .env；密钥不显示、不写日志，也不会提交到 Git。")
         with st.form("provider_configuration_form"):
             provider_label = st.selectbox(
                 "服务商",
@@ -174,7 +252,7 @@ def _render_provider_configuration() -> None:
                 value="",
                 placeholder="粘贴你的 API Key",
             )
-            apply = st.form_submit_button("应用到当前会话", use_container_width=True)
+            apply = st.form_submit_button("保存到本机并应用", use_container_width=True)
         if apply:
             provider_key = api_key.strip() or current.get("api_key", "")
             if not all(value.strip() for value in (model, base_url, provider_key)):
@@ -188,17 +266,23 @@ def _render_provider_configuration() -> None:
                     "base_url": base_url.strip(),
                     "api_key": provider_key,
                 }
+                save_local_settings(
+                    {
+                        "PKB_AI_PROVIDER": session_values["provider_name"],
+                        "PKB_AI_MODEL": session_values["model"],
+                        "PKB_AI_BASE_URL": session_values["base_url"],
+                        "PKB_AI_API_KEY": session_values["api_key"],
+                    }
+                )
                 st.session_state["provider_session"] = session_values
-                st.success("已应用到当前会话。API 密钥不会写入本地文件。")
-        if current and st.button("清除当前会话配置", key="clear_provider_session"):
-            st.session_state["provider_session"] = None
-            st.rerun()
+                st.success("已保存到本机，之后会自动加载。")
 
 
 def _render_embedding_configuration() -> None:
-    """Render an independent, browser-session-only Embedding form."""
+    """Render the local Embedding configuration form without exposing its key."""
 
-    current = _embedding_session_values() or {}
+    current = _embedding_session_values() or _saved_embedding_values() or {}
+    saved = _saved_embedding_values() is not None
     embedding_keys = ("embedding_model", "embedding_base_url", "embedding_api_key")
     enabled = all(current.get(key, "").strip() for key in embedding_keys)
     with st.expander("语义检索 / DashScope Embedding", expanded=not enabled):
@@ -206,7 +290,10 @@ def _render_embedding_configuration() -> None:
             st.success("当前已启用 DashScope 语义检索。")
         else:
             st.info("当前为仅直接检索；配置后才会启用语义向量召回。")
-        st.caption("配置仅保存在当前浏览器会话，不写入 .env 文件。")
+        if saved:
+            st.caption("配置已从本机 .env 自动加载。")
+        else:
+            st.caption("保存后写入本项目根目录的本机 .env；密钥不显示、不写日志，也不会提交到 Git。")
         with st.form("embedding_configuration_form"):
             model = st.text_input(
                 "Embedding 模型",
@@ -223,7 +310,7 @@ def _render_embedding_configuration() -> None:
                 value="",
                 placeholder="粘贴 Embedding API Key",
             )
-            apply = st.form_submit_button("应用语义检索配置", use_container_width=True)
+            apply = st.form_submit_button("保存语义检索配置", use_container_width=True)
         if apply:
             key = api_key.strip() or current.get("embedding_api_key", "")
             values = (model.strip(), base_url.strip(), key)
@@ -238,10 +325,18 @@ def _render_embedding_configuration() -> None:
                     "embedding_base_url": values[1],
                     "embedding_api_key": values[2],
                 }
-                st.success("已启用 DashScope 语义检索，仅在当前会话生效。")
-        if enabled and st.button("关闭语义检索", key="clear_embedding_session"):
-            st.session_state["embedding_session"] = None
-            st.rerun()
+                save_local_settings(
+                    {
+                        "PKB_EMBEDDING_MODEL": values[0],
+                        "PKB_EMBEDDING_BASE_URL": values[1],
+                        "PKB_EMBEDDING_API_KEY": values[2],
+                    }
+                )
+                # Saved settings are the durable source of truth.  Dropping a
+                # previous browser-only binding prevents an old endpoint from
+                # overriding the just-saved configuration on later searches.
+                st.session_state["embedding_session"] = None
+                st.success("已保存到本机，已重新加载语义检索配置。")
 
 
 def _render_sidebar(service: UIService) -> None:
@@ -456,21 +551,65 @@ def _render_retrieval(result: Any, *, heading: str = "检索结果") -> None:
                     st.caption(f"{reason.field}：{reason.explanation}")
 
 
-def _render_sources(sources: Sequence[Any]) -> None:
+def _source_web_url(source: Any) -> str | None:
+    """Return a safe HTTP(S) original-source URL when one is available."""
+
+    for value in (getattr(source, "reference", None), getattr(source, "path", None)):
+        if not isinstance(value, str):
+            continue
+        parsed = urlparse(value.strip())
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return value.strip()
+    return None
+
+
+def _source_raw_path(source: Any, raw_dir: Path) -> Path | None:
+    """Resolve an immutable local original without trusting arbitrary paths."""
+
+    if getattr(source, "kind", None) not in {"note", "raw"}:
+        return None
+    source_id = getattr(source, "source_id", "")
+    if not isinstance(source_id, str) or not source_id or Path(source_id).name != source_id:
+        return None
+    directory = raw_dir / source_id
+    for filename in ("original.pdf", "original.txt"):
+        candidate = directory / filename
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _render_sources(sources: Sequence[Any], *, raw_dir: Path) -> None:
     if not sources:
         st.caption("暂无可展示的来源链。")
         return
     st.markdown('<div class="pkb-source-heading">来源链</div>', unsafe_allow_html=True)
-    rows: list[str] = []
-    for source in sources:
+    for index, source in enumerate(sources):
         location = source.path or source.reference or source.source_id
         availability = "可读取" if source.available else "不可读取"
         title = source.title or source.source_id
-        rows.append(
-            f"<div class=\"pkb-source-row\"><span class=\"pkb-source-kind\">{_html(source.kind)}</span>"
-            f"<strong>{_html(title)}</strong><span>{_html(availability)} · {_html(location)}</span></div>",
-        )
-    st.markdown("".join(rows), unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(
+                f"<div class=\"pkb-source-row\"><span class=\"pkb-source-kind\">{_html(source.kind)}</span>"
+                f"<strong>{_html(title)}</strong><span>{_html(availability)} · {_html(location)}</span></div>",
+                unsafe_allow_html=True,
+            )
+            web_url = _source_web_url(source)
+            raw_path = _source_raw_path(source, raw_dir)
+            if web_url:
+                st.link_button("打开原文网页", web_url, use_container_width=True)
+            elif raw_path is not None and raw_path.suffix.lower() == ".pdf":
+                st.download_button(
+                    "下载原始 PDF",
+                    data=raw_path.read_bytes(),
+                    file_name=f"{raw_path.parent.name}.pdf",
+                    mime="application/pdf",
+                    key=f"source-pdf-{index}-{source.source_id}",
+                    use_container_width=True,
+                )
+            elif raw_path is not None:
+                with st.expander("查看原始文本"):
+                    st.text(raw_path.read_text(encoding="utf-8"))
 
 
 def _render_import_tab(service: UIService) -> None:
@@ -569,6 +708,13 @@ def _render_search_qa_tab(service: UIService) -> None:
                     query,
                     limit=int(limit),
                 )
+            except EmbeddingRequestError:
+                st.warning("语义检索服务暂时不可用，已切换为本地关键词检索。")
+                st.session_state["search_result"] = service.search(
+                    query,
+                    limit=int(limit),
+                    include_embeddings=False,
+                )
             except Exception as error:
                 _show_error(error)
     with qa_column:
@@ -598,6 +744,13 @@ def _render_search_qa_tab(service: UIService) -> None:
                     question,
                     limit=int(qa_limit),
                 )
+            except EmbeddingRequestError:
+                st.warning("语义检索服务暂时不可用，已使用本地关键词检索生成回答。")
+                st.session_state["qa_result"] = service.answer(
+                    question,
+                    limit=int(qa_limit),
+                    include_embeddings=False,
+                )
             except Exception as error:
                 _show_error(error)
     _render_retrieval(st.session_state["search_result"], heading="检索结果")
@@ -625,7 +778,7 @@ def _render_search_qa_tab(service: UIService) -> None:
                 st.markdown(result.answer)
             else:
                 st.info(result.reason)
-            _render_sources(result.sources)
+            _render_sources(result.sources, raw_dir=service.paths.raw_dir)
             for evidence in result.evidence:
                 st.caption(f"{evidence.source_kind}：{evidence.explanation}")
 
@@ -833,11 +986,14 @@ def _render_topics_tab(service: UIService) -> None:
         )
         if script_result.script:
             st.success(script_result.message)
+            script_title = getattr(script_result, "title", None)
+            if script_title:
+                st.text_input("建议发布标题", value=script_title)
             st.text_area("口播稿", value=script_result.script_text, height=360)
         else:
             st.warning(script_result.message)
         _render_retrieval(script_result.retrieval, heading="二次检索")
-        _render_sources(script_result.sources)
+        _render_sources(script_result.sources, raw_dir=service.paths.raw_dir)
         for evidence in script_result.evidence:
             st.caption(f"{evidence.source_kind}：{evidence.explanation}")
 
@@ -851,6 +1007,7 @@ def main(service: UIService | None = None) -> None:
         layout="wide",
         initial_sidebar_state="auto",
     )
+    _install_translation_guard()
     _init_state()
     _render_theme()
     default_service = service or UIService()

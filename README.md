@@ -21,7 +21,7 @@ uv run streamlit run src/pkb/ui/app.py
 
 页面不会再把测试用的 Mock 输出当作回答。未配置 Provider 时，问答会保留本地证据和来源，但会明确提示尚未生成语义回答。
 
-也可以直接在页面左侧的“AI Provider 配置”填写 Provider、模型、endpoint 与 API Key，再点击“应用到当前会话”。该密钥只保存在当前浏览器会话的内存中，不会写入 `.env`、日志或 Git；刷新或关闭页面后需重新填写。
+也可以直接在页面左侧填写 DeepSeek 与向量模型配置，再点击保存。网页会将配置保存在项目根目录的本机 `.env`，之后启动网页时自动加载，无需重复输入。保存时 `.env` 会限制为当前系统用户可读写；密钥不显示、不写日志，也不会提交到 Git。
 
 复制 `.env.example` 为本机 `.env`，填入自己的 DeepSeek API Key 后重启 Streamlit：
 
@@ -30,10 +30,15 @@ PKB_AI_PROVIDER=deepseek
 PKB_AI_MODEL=deepseek-v4-flash
 PKB_AI_BASE_URL=https://api.deepseek.com
 PKB_AI_API_KEY=your-secret-key
+
+# 可选：配置后启用向量语义检索；三项留空则使用直接检索
+PKB_EMBEDDING_MODEL=qwen3.7-text-embedding-flash
+PKB_EMBEDDING_BASE_URL=https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+PKB_EMBEDDING_API_KEY=your-embedding-secret-key
 ```
 
 - 目的：让导入、主题综合、问答和口播通过 OpenAI-compatible `chat/completions` 接口使用真实模型，同时回答仍只传入本地检索出的证据。
-- 预期：重启页面后，“生成回答”会给出中文回答与来源链；选题继续只在本地 Index、Notes 和 Knowledge 上运行。
+- 预期：重启电脑或页面后，网页自动读取已保存配置；“生成回答”会给出中文回答与来源链，配置向量模型后会启用语义召回。
 - 失败后：先确认 `.env` 位于项目根目录、四个变量均非空并重启页面；若服务端返回 HTTP 错误，核对 API Key、账户余额、模型名和 endpoint。不要把 `.env` 或 API Key 提交到 Git。
 
 ## 已批准技术栈

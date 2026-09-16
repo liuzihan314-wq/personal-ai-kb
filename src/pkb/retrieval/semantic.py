@@ -128,7 +128,7 @@ class DashScopeEmbeddingClient:
         if not isinstance(raw_data, list):
             raise EmbeddingRequestError("Embedding response has no data list")
 
-        indexed: dict[int, EmbeddingVector] = {}
+        parsed: list[tuple[int, EmbeddingVector]] = []
         for item in raw_data:
             if not isinstance(item, Mapping):
                 raise EmbeddingRequestError("Embedding response contains an invalid item")
@@ -142,11 +142,22 @@ class DashScopeEmbeddingClient:
                 raise EmbeddingRequestError("Embedding response contains invalid values") from exc
             if not vector or not all(math.isfinite(value) for value in vector):
                 raise EmbeddingRequestError("Embedding response contains an invalid vector")
-            indexed[index] = vector
+            parsed.append((index, vector))
 
-        if set(indexed) != set(range(len(values))):
-            raise EmbeddingRequestError("Embedding response indexes do not match the request")
-        result = [indexed[index] for index in range(len(values))]
+        # Some DashScope-compatible embedding models return every batch item
+        # with index=0 while preserving request order.  Accept only that exact
+        # observed shape; all other malformed index sets remain errors.
+        if len(parsed) == len(values) and len(values) > 1 and all(
+            index == 0 for index, _vector in parsed
+        ):
+            result = [vector for _index, vector in parsed]
+        else:
+            indexed = {index: vector for index, vector in parsed}
+            if set(indexed) != set(range(len(values))):
+                raise EmbeddingRequestError(
+                    "Embedding response indexes do not match the request"
+                )
+            result = [indexed[index] for index in range(len(values))]
         dimension = len(result[0])
         if any(len(vector) != dimension for vector in result):
             raise EmbeddingRequestError("Embedding response vectors have different dimensions")

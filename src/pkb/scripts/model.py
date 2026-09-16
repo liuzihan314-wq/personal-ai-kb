@@ -138,6 +138,7 @@ class ScriptResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     topic: str | None = None
+    title: str | None = None
     status: ScriptStatus
     selection_confirmed: bool = False
     selection: ScriptSelection
@@ -150,6 +151,7 @@ class ScriptResult(BaseModel):
     @model_validator(mode="after")
     def validate_state(self) -> "ScriptResult":
         self.topic = " ".join(self.topic.split()) if self.topic else None
+        self.title = " ".join(self.title.split()) if self.title else None
         if self.selection_confirmed and not self.selection.confirmed:
             self.selection.confirmed = True
         self.selection_confirmed = self.selection.confirmed

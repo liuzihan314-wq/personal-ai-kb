@@ -2,9 +2,12 @@
 
 import json
 from collections.abc import Callable, Mapping, Sequence
+import ssl
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import certifi
 
 from pkb.providers.protocol import (
     DocumentInput,
@@ -31,6 +34,16 @@ def _context(documents: Sequence[ProviderDocument]) -> str:
         identity = item.document_id or f"source-{index}"
         title = item.title or identity
         blocks.append(f"[来源 {index}: {title} | {identity}]\n{item.content}")
+    return "\n\n".join(blocks)
+
+
+def _script_context(documents: Sequence[ProviderDocument]) -> str:
+    """Format writing material without source numbers leaking into the script."""
+
+    blocks = []
+    for item in documents:
+        title = item.title or item.document_id or "背景材料"
+        blocks.append(f"【{title}】\n{item.content}")
     return "\n\n".join(blocks)
 
 
@@ -72,7 +85,12 @@ class OpenAICompatibleProvider:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            with urlopen(  # noqa: S310
+                request,
+                timeout=self.timeout_seconds,
+                context=ssl_context,
+            ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
@@ -209,6 +227,15 @@ class OpenAICompatibleProvider:
         target_seconds: int = 150,
     ) -> str:
         return self._complete(
-            "你是中文口播编辑。只使用本地来源，写清晰、有节奏的口播稿；不要加入未给出的事实。",
-            f"主题：{topic}\n目标时长：{target_seconds} 秒\n\n本地来源：\n{_context(context)}",
+            (
+                "你是中文自媒体口播编剧。根据给定背景材料写一篇可以直接录制的视频口播稿，"
+                "不是知识库问答，也不是资料摘要。全文使用自然口语和短句，直接对观众说话。"
+                "开头两句话必须有钩子，可使用反常识判断、痛点或结果承诺，但不能捏造事实。"
+                "中段围绕一个主线展开，用自然转折串联具体观点和做法；结尾给出明确收束或行动建议。"
+                "输出 700 到 900 个中文字符，不要标题、提纲、Markdown 列表或写作说明。"
+                "正文禁止出现‘来源一’‘来源二’‘来源三’‘Raw’‘Note’‘Knowledge’"
+                "‘本地检索’‘根据资料’等知识库内部措辞，也不要向观众解释证据链。"
+                "只使用材料中能够支持的事实，不补充材料之外的数据和结论。"
+            ),
+            f"口播主题：{topic}\n目标时长：{target_seconds} 秒\n\n背景材料：\n{_script_context(context)}",
         )
