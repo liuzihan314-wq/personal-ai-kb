@@ -205,15 +205,23 @@ def update_local_users_file(
     config_path = Path(path)
     existing: dict[str, Any] = {}
     if config_path.exists():
-        config = LocalAuthConfig.from_file(config_path)
-        existing = {
-            record.username: {
-                "password_hash": record.password_hash,
-                "role": record.role.value,
-                "display_name": record.display_name,
+        try:
+            text = config_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise AuthConfigurationError(
+                "local_users_file_unavailable",
+                "本地账号配置文件不可读",
+            ) from exc
+        if text.strip():
+            parsed = parse_local_users(text)
+            existing = {
+                record.username: {
+                    "password_hash": record.password_hash,
+                    "role": record.role.value,
+                    "display_name": record.display_name,
+                }
+                for record in parsed.values()
             }
-            for record in config.users.values()
-        }
 
     record = LocalUserRecord(
         username=username,

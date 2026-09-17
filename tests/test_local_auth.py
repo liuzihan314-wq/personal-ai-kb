@@ -118,6 +118,8 @@ def test_local_authenticator_rejects_wrong_password_with_same_code():
 
 def test_update_local_users_file_preserves_existing_users(tmp_path: Path):
     path = tmp_path / "config" / "local_users.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}\n", encoding="utf-8")
     update_local_users_file(
         path,
         username="alice",
