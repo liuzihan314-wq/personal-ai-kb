@@ -1067,14 +1067,9 @@ def main(service: UIService | None = None) -> None:
     except AuthError as error:
         st.error(f"V2 认证失败：{error}")
         st.stop()
-    default_service = service or UIService()
+    default_service = service or UIService(identity=identity)
 
     _render_sidebar(default_service, identity=identity)
-    if identity is not None:
-        st.warning(
-            "身份已验证。为避免在用户级隔离完成前读取 V1 共享数据，本次请求不会进入知识库。"
-        )
-        st.stop()
     active_service = default_service if service is not None else _service_for_current_session(default_service)
     _render_brand_header()
     _render_flow_overview()
