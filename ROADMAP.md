@@ -872,13 +872,15 @@ Acceptance record: 2026-09-17 14:20 MAIN 验收 PASS，slice commit `4d2446e`，
 
 ## TASK-030 — User-scoped History and Audit Records
 
-Status: READY
+Status: DONE
 Dependencies: TASK-029 PASS
 Suggested branch: `feat/v2-history`
 
 目标：按用户保存问答、选题和口播历史，并记录必要的操作时间与结果状态；历史不能被其他用户读取或静默覆盖。
 
 决策：V2 首期管理员不能查看成员全局历史。若未来需要审计成员内容，必须另立明确授权、只读范围和验收任务。
+
+Acceptance record: 2026-09-17 17:05 MAIN 验收 PASS，slice commit `2cb65da`，merge commit `57fa873`（`--no-ff` 合入本地 `main`）。检查证据：`pytest` 129 passed（基线 124，新增 5）且仅存 TASK-003 已跟踪的上游 PyMuPDF／SWIG 警告；`uv lock --check` 通过。实现要点：新增 `pkb.history` 的 `HistoryRecord`／`HistoryStore`，每条历史记录独立 JSON 文件并以独占 `x` 模式写入，重复 ID 明确拒绝覆盖；记录仅保存 kind、UTC 时间、结果状态和问答／选题／口播必要标签，不复制完整答案、口播正文、来源或 Provider 内容；`UIService` 在 `answer`／`generate_topics`／`write_script` 成功后追加对应记录，并暴露 `list_history()`。逐项验证：①`test_history_store_appends_without_overwrite` 验证拒绝覆盖；②`test_history_store_returns_chronological_order` 与 `test_history_store_rejects_corrupt_record` 验证按时间读取、损坏记录不静默忽略；③`test_history_is_scoped_to_each_user` 验证 Alice 与 Bob 的问答／选题历史互不可见；④`test_script_result_is_recorded_after_generation` 验证口播生成后记录状态、主题和标题。管理员未获得任何全局历史读取路径。
 
 ## TASK-031 — UI Login State and Role Hint
 
@@ -941,14 +943,14 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 
 当前可以推进：
 
-- TASK-028 Authentication and Role Minimal Slice：已在独立可见 Task 与 worktree 中执行
+- TASK-031 UI Login State and Role Hint：READY，依赖 TASK-028 PASS
 - TASK-017 Windows Core Smoke Test：仅在真实 Windows 10/11 环境可用后派发
 
 必须串行：
 
 - TASK-017 PASS → TASK-019 Windows WeChat Favorites POC
 - TASK-019 PASS → TASK-018 Windows Scheduler Adapter
-- TASK-027 DONE → TASK-028 → TASK-029 → TASK-030
+- TASK-027 DONE → TASK-028 → TASK-029 → TASK-030 DONE
 - TASK-028 PASS → TASK-031
 - TASK-029、TASK-031 PASS → TASK-032
 - TASK-030、TASK-032 PASS → TASK-033
