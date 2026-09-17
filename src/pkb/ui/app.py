@@ -49,6 +49,8 @@ _INGEST_INVALIDATED_STATE = (
     "topic_widget_previous",
 )
 
+_CLOUDFLARE_LOGOUT_PATH = "/cdn-cgi/access/logout"
+
 
 def _init_state() -> None:
     for key, value in _STATE_DEFAULTS.items():
@@ -368,6 +370,28 @@ def _render_embedding_configuration() -> None:
                 st.success("已保存到本机，已重新加载语义检索配置。")
 
 
+def _cloudflare_logout_url() -> str:
+    """Return the official Cloudflare Access logout path.
+
+    The path is intentionally relative so the browser resolves it against the
+    current application origin without embedding an internal server host or
+    deployment-specific URL in the page.
+    """
+
+    return _CLOUDFLARE_LOGOUT_PATH
+
+
+def _identity_display_name(identity: IdentityContext) -> str:
+    """Return a UI-safe display name without echoing the email claim."""
+
+    name = (identity.display_name or "").strip()
+    if not name:
+        return "已认证用户"
+    if identity.email and name.casefold() == identity.email.casefold():
+        return "已认证用户"
+    return name
+
+
 def _render_identity_status(identity: IdentityContext) -> None:
     """Show safe identity fields without exposing claims or server paths."""
 
@@ -375,10 +399,16 @@ def _render_identity_status(identity: IdentityContext) -> None:
         f"""
         <div class="pkb-side-status">
             <strong><span class="pkb-status-dot"></span>当前登录身份</strong>
-            <p>{_html(identity.display_name)} · 角色：{_html(identity.role.display_name)}</p>
+            <p>{_html(_identity_display_name(identity))} · 角色：{_html(identity.role.display_name)}</p>
+            <p>已通过 Cloudflare Access 认证</p>
         </div>
         """,
         unsafe_allow_html=True,
+    )
+    st.link_button(
+        "退出登录 / 重新登录",
+        _cloudflare_logout_url(),
+        use_container_width=True,
     )
 
 
@@ -414,7 +444,7 @@ def _render_sidebar(
             st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
         else:
             _render_identity_status(identity)
-            st.caption("V2 认证模式已启用；用户级数据隔离尚待后续任务接入。")
+            st.caption("V2 认证已启用；数据按当前登录身份隔离。")
         _render_provider_configuration()
         _render_embedding_configuration()
 
