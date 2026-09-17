@@ -14,6 +14,7 @@ from pkb.auth import (
     AuthenticationError,
     CloudflareAccessAuthenticator,
     IdentityContext,
+    LocalAuthenticator,
 )
 from pkb.config import get_settings, save_local_settings
 from pkb.retrieval import EmbeddingRequestError
@@ -50,6 +51,7 @@ _INGEST_INVALIDATED_STATE = (
 )
 
 _CLOUDFLARE_LOGOUT_PATH = "/cdn-cgi/access/logout"
+_LOCAL_IDENTITY_STATE_KEY = "_local_identity"
 
 
 def _init_state() -> None:
@@ -370,6 +372,60 @@ def _render_embedding_configuration() -> None:
                 st.success("已保存到本机，已重新加载语义检索配置。")
 
 
+def _local_identity_from_session(
+    session_state: Any | None = None,
+) -> IdentityContext | None:
+    """Return the local identity stored in this browser session, if any."""
+
+    state = st.session_state if session_state is None else session_state
+    identity = state.get(_LOCAL_IDENTITY_STATE_KEY)
+    if isinstance(identity, IdentityContext):
+        return identity
+    return None
+
+
+def _render_local_login(settings: Any) -> None:
+    """Render the no-domain local username/password login gate."""
+
+    with st.form("local_login"):
+        username = st.text_input("用户名")
+        password = st.text_input("密码", type="password")
+        submitted = st.form_submit_button("登录")
+    if not submitted:
+        return
+    if not username or not password:
+        st.error("请输入用户名和密码。")
+        return
+
+    authenticator = LocalAuthenticator.from_settings(settings)
+    try:
+        identity = authenticator.authenticate_credentials(username, password)
+    except AuthError as error:
+        st.error(f"登录失败：{error}")
+        return
+
+    st.session_state[_LOCAL_IDENTITY_STATE_KEY] = identity
+    st.rerun()
+
+
+def _render_local_identity_status(identity: IdentityContext) -> None:
+    """Show a local account identity and a session-scoped logout action."""
+
+    st.markdown(
+        f"""
+        <div class="pkb-side-status">
+            <strong><span class="pkb-status-dot"></span>当前登录身份</strong>
+            <p>{_html(_identity_display_name(identity))} · 角色：{_html(identity.role.display_name)}</p>
+            <p>已通过本地账号登录</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("退出登录", key="local_logout", use_container_width=True):
+        st.session_state.pop(_LOCAL_IDENTITY_STATE_KEY, None)
+        st.rerun()
+
+
 def _cloudflare_logout_url() -> str:
     """Return the official Cloudflare Access logout path.
 
@@ -392,8 +448,16 @@ def _identity_display_name(identity: IdentityContext) -> str:
     return name
 
 
-def _render_identity_status(identity: IdentityContext) -> None:
+def _render_identity_status(
+    identity: IdentityContext,
+    *,
+    auth_mode: str = "cloudflare",
+) -> None:
     """Show safe identity fields without exposing claims or server paths."""
+
+    if auth_mode == "local":
+        _render_local_identity_status(identity)
+        return
 
     st.markdown(
         f"""
@@ -416,6 +480,7 @@ def _render_sidebar(
     service: UIService,
     *,
     identity: IdentityContext | None = None,
+    auth_mode: str = "cloudflare",
 ) -> None:
     with st.sidebar:
         st.markdown(
@@ -443,8 +508,11 @@ def _render_sidebar(
             st.caption(f"数据目录：{service.paths.data_dir}")
             st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
         else:
-            _render_identity_status(identity)
-            st.caption("V2 认证已启用；数据按当前登录身份隔离。")
+            _render_identity_status(identity, auth_mode=auth_mode)
+            if auth_mode == "local":
+                st.caption("本地账号模式已启用；数据按当前登录身份隔离。")
+            else:
+                st.caption("V2 认证已启用；数据按当前登录身份隔离。")
         _render_provider_configuration()
         _render_embedding_configuration()
 
@@ -1092,14 +1160,25 @@ def main(service: UIService | None = None) -> None:
     _init_state()
     _render_theme()
     settings = get_settings()
-    try:
-        identity = _identity_for_settings(settings)
-    except AuthError as error:
-        st.error(f"V2 认证失败：{error}")
-        st.stop()
+    if settings.auth_enabled and settings.auth_mode == "local":
+        identity = _local_identity_from_session()
+        if identity is None:
+            _render_local_login(settings)
+            st.stop()
+    else:
+        try:
+            identity = _identity_for_settings(settings)
+        except AuthError as error:
+            st.error(f"V2 认证失败：{error}")
+            st.stop()
+
     default_service = service or UIService(identity=identity)
 
-    _render_sidebar(default_service, identity=identity)
+    _render_sidebar(
+        default_service,
+        identity=identity,
+        auth_mode=settings.auth_mode,
+    )
     active_service = default_service if service is not None else _service_for_current_session(default_service)
     _render_brand_header()
     _render_flow_overview()

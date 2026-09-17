@@ -4,7 +4,7 @@
 
 > 当前版本：V1 本地、单用户 Streamlit MVP。
 >
-> 后续路线：V2 Cloudflare Access ＋ 腾讯云 ＋ 多用户隔离（规划中，尚未部署）。
+> 后续路线：V2 多用户隔离；正式入口规划 Cloudflare Access ＋ 腾讯云，另有本地账号密码分享模式（已实现）。
 
 ## 它解决什么问题
 
@@ -148,11 +148,18 @@ cp .env.example .env
 
 需要注意的隐私边界：`Raw` 在本机保存，但配置真实 Provider 后，导入资料会发送到该 Provider 以生成 Notes，问答和口播也会发送当前检索出的上下文。请只处理自己有权使用的资料，并单独评估所选服务商的数据政策；未配置 Provider 时，页面不会把 Mock Provider 的测试文本当作真实回答。
 
-### V2 认证最小切片（实验性）
+### V2 认证模式（实验性）
 
-TASK-028 已提供可测试的 Cloudflare Access JWT 适配器，但这不代表项目已经完成云端部署、多用户存储或权限隔离。V1 默认保持认证关闭；只有在明确配置 `PKB_AUTH_ENABLED=true`，并将应用放在已配置的 Access 入口后，Streamlit 才会读取只读的 `st.context.headers` 中的 `Cf-Access-Jwt-Assertion`。
+V1 默认 `PKB_AUTH_ENABLED=false`，保持本地单用户模式。需要多用户隔离时可以选择两种认证入口之一：
 
-启用时必须同时提供以下非密钥配置：
+- `PKB_AUTH_MODE=cloudflare`：使用 Cloudflare Access JWT 请求头；适合正式公网入口，但需要域名、Cloudflare 账号和 Access 配置。
+- `PKB_AUTH_MODE=local`：使用本机账号密码登录；适合不买域名、给朋友临时分享的低敏感场景，不是正式生产入口。
+
+两种模式认证成功后都会生成 `IdentityContext`，并绑定到 `data/users/<user_id>/`，不同用户不会看到对方的 PDF、笔记、索引、检索来源、问答或历史。
+
+#### Cloudflare Access 模式
+
+启用 `PKB_AUTH_ENABLED=true` 和 `PKB_AUTH_MODE=cloudflare`，并将应用放在已配置的 Access 入口后，Streamlit 会读取 `st.context.headers` 中的 `Cf-Access-Jwt-Assertion`。
 
 | 变量 | 作用 |
 | --- | --- |
@@ -161,7 +168,30 @@ TASK-028 已提供可测试的 Cloudflare Access JWT 适配器，但这不代表
 | `PKB_AUTH_JWKS_URL` | 可选；留空时由 issuer 推导 Access 官方证书端点 |
 | `PKB_AUTH_ROLE_MAPPING` | 受保护的 `sub=admin;sub=member` 映射；未知或冲突角色会被拒绝 |
 
-适配器只接受固定的 `RS256`，会校验签名、`iss`、`aud`、`exp`、`nbf`（如存在）和 `sub`；内部 `user_id` 根据 issuer 与 sub 的 SHA-256 生成，不直接使用邮箱。缺少令牌、校验失败、身份未配置角色或配置不完整都会停止本次请求，不回退到 V1 共享目录。当前 UI 在身份验证成功后也会暂不进入 V1 共享知识库，直到后续用户级存储任务完成；这不是多用户隔离已经完成的声明。真实 issuer、audience、身份映射和凭据不应写入仓库；合成 RSA 密钥、JWKS 和 JWT 仅用于测试。
+适配器只接受固定的 `RS256`，会校验签名、`iss`、`aud`、`exp`、`nbf`（如存在）和 `sub`；内部 `user_id` 根据 issuer 与 sub 的 SHA-256 生成，不直接使用邮箱。缺少令牌、校验失败、身份未配置角色或配置不完整都会停止本次请求，不回退到 V1 共享目录。真实 issuer、audience、身份映射和凭据不应写入仓库；合成 RSA 密钥、JWKS 和 JWT 仅用于测试。
+
+#### 本地账号密码模式
+
+启用 `PKB_AUTH_ENABLED=true` 和 `PKB_AUTH_MODE=local` 后，Streamlit 先显示用户名密码登录页。本地账号来自 `PKB_AUTH_LOCAL_USERS_FILE`，默认路径是 `config/local_users.json`，该文件已被 `.gitignore` 排除。
+
+创建本地账号：
+
+```bash
+mkdir -p config
+cp config/local_users.example.json config/local_users.json
+uv run pkb auth-add-local-user alice --role admin --display-name "管理员 A"
+uv run pkb auth-add-local-user bob --role member --display-name "成员 B"
+```
+
+命令会安全提示输入密码，只把 PBKDF2 哈希写入 `config/local_users.json`，不保存明文密码。随后在 `.env` 中设置：
+
+```bash
+PKB_AUTH_ENABLED=true
+PKB_AUTH_MODE=local
+PKB_AUTH_LOCAL_USERS_FILE=config/local_users.json
+```
+
+重启 Streamlit 后即可登录。每个用户名映射到独立用户目录，A／B 无法看到对方导入的 PDF、笔记、检索来源、问答和历史；本地模式没有 Cloudflare 边缘防护，只适合可信的小范围分享，不要把高敏感资料放进这个入口。
 
 ## 数据目录与安全边界
 

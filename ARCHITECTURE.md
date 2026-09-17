@@ -465,7 +465,11 @@ Cloudflare 边缘的 HTTPS 与登录页不是应用层授权的替代品。TASK-
 
 ### 13.2 身份、角色与可信边界
 
-应用层使用 Cloudflare Access 应用 JWT 的 `Cf-Access-Jwt-Assertion` 请求头作为身份输入。Streamlit 入口应通过公开的只读 `st.context.headers` 读取初始请求头，不使用已废弃的私有 WebSocket header API。实现时必须校验：
+应用层使用 Cloudflare Access 应用 JWT 的 `Cf-Access-Jwt-Assertion` 请求头作为身份输入。Streamlit 入口应通过公开的只读 `st.context.headers` 读取初始请求头，不使用已废弃的私有 WebSocket header API。
+
+无域名轻量分享可以改用 `PKB_AUTH_MODE=local`：应用内用户名密码登录由 `LocalAuthenticator` 校验，密码只保存 PBKDF2 哈希，成功后的 `IdentityContext` 与 Cloudflare 模式进入同一个 `UserScopedStorage`。该模式用于低风险朋友间分享，不提供 Access 边缘防护，不应视为生产部署。
+
+实现时必须校验：
 
 - JWT 签名和允许的算法；公钥来自当前 Cloudflare Access team 的官方证书端点，不从请求中接受公钥。
 - `iss` 与预配置的 Access team issuer 一致。

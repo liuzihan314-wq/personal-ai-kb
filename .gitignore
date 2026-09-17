@@ -15,6 +15,7 @@ tests/_tmp/
 .env
 .env.*
 !.env.example
+config/local_users.json
 
 # Local knowledge, runtime state, and generated deliverables
 data/

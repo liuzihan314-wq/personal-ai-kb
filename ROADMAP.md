@@ -917,6 +917,24 @@ Acceptance:
 - 无身份、非法 JWT、越权路径、角色错误、Tunnel／服务不可用和磁盘失败均有确定错误。
 - V1 既有测试与本地单用户最小闭环通过；无密钥、真实私人资料或未授权远端写入。
 
+## TASK-035 — Local Account Multi-user Mode
+
+Status: DONE
+Dependencies: TASK-030 PASS、TASK-031 PASS
+Suggested branch: `feat/v2-local-auth`
+
+目标：在不购买域名、不使用 Cloudflare Access 的前提下，用本机账号密码完成双用户数据隔离，为低风险朋友间分享提供实验入口。
+
+Acceptance:
+
+- `PKB_AUTH_MODE=local` 时先显示登录页，认证成功后进入独立用户根目录。
+- 用户名密码只以 PBKDF2 哈希保存在 `config/local_users.json`，不写明文或日志。
+- A／B 映射到不同的 `data/users/<user_id>/`，无法看到对方 PDF、笔记、索引和历史。
+- V1 默认 `PKB_AUTH_ENABLED=false` 不改变；Cloudflare Access 模式保留。
+- CLI 能安全生成哈希并添加本地用户；全量测试通过。
+
+Acceptance record: 2026-09-17 18:26 MAIN 验收 PASS，feature branch `feat/v2-local-auth`，slice commit `c02dfbc`，集成切片 commit `2ef92ca`。检查证据：`pytest` 145 passed（基线 132，新增 13）且仅存已知 PyMuPDF／SWIG 5 条上游警告；`uv lock --check` 通过。实现要点：新增 `src/pkb/auth/local.py`，使用 `pbkdf2_sha256`、随机 salt 与 `hmac.compare_digest`；本地用户名派生 `u_ + sha256("local\0username")`，直接复用既有 `UserScopedStorage`，未新增数据目录或迁移；UI 本地模式登录后只在会话状态保存 `IdentityContext`，退出时清除会话；CLI 新增 `auth-hash-password` 与 `auth-add-local-user`，本地用户文件原子写入并设 600 权限；文档同步说明该模式不替代 Cloudflare Access 生产入口。
+
 ---
 
 # M9 — GitHub Presentation
@@ -956,7 +974,9 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 - TASK-029、TASK-031 PASS → TASK-032
 - TASK-030、TASK-032 PASS → TASK-033
 
-V2 后续调度暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。
+V2 正式部署调度仍暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。
+
+本地无域名分享线已完成 TASK-035，可作为朋友间低敏感试用入口；它不替代 TASK-032／TASK-033 的正式 Access 部署与双身份 E2E 验收。
 
 继续阻塞：
 
