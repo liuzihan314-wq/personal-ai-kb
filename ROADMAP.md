@@ -933,7 +933,7 @@ Acceptance:
 - V1 默认 `PKB_AUTH_ENABLED=false` 不改变；Cloudflare Access 模式保留。
 - CLI 能安全生成哈希并添加本地用户；全量测试通过。
 
-Acceptance record: 2026-09-17 18:26 MAIN 验收 PASS，feature branch `feat/v2-local-auth`，slice commit `c02dfbc`，集成切片 commit `2ef92ca`。检查证据：`pytest` 145 passed（基线 132，新增 13）且仅存已知 PyMuPDF／SWIG 5 条上游警告；`uv lock --check` 通过。实现要点：新增 `src/pkb/auth/local.py`，使用 `pbkdf2_sha256`、随机 salt 与 `hmac.compare_digest`；本地用户名派生 `u_ + sha256("local\0username")`，直接复用既有 `UserScopedStorage`，未新增数据目录或迁移；UI 本地模式登录后只在会话状态保存 `IdentityContext`，退出时清除会话；CLI 新增 `auth-hash-password` 与 `auth-add-local-user`，本地用户文件原子写入并设 600 权限；文档同步说明该模式不替代 Cloudflare Access 生产入口。
+Acceptance record: 2026-09-17 18:26 MAIN 验收 PASS，feature branch `feat/v2-local-auth`，slice commit `c02dfbc`，集成切片 commit `2ef92ca`。检查证据：`pytest` 145 passed（基线 132，新增 13）且仅存已知 PyMuPDF／SWIG 5 条上游警告；`uv lock --check` 通过。实现要点：新增 `src/pkb/auth/local.py`，使用 `pbkdf2_sha256`、随机 salt 与 `hmac.compare_digest`；本地用户名派生 `u_ + sha256("local\0username")`，直接复用既有 `UserScopedStorage`，未新增数据目录或迁移；UI 本地模式登录后只在会话状态保存 `IdentityContext`，退出时清除会话；CLI 新增 `auth-hash-password` 与 `auth-add-local-user`，本地用户文件原子写入并设 600 权限；文档同步说明该模式不替代 Cloudflare Access 生产入口。后置修复 commit `aba1ba4`：允许先复制空模板 `config/local_users.example.json`，再由 CLI 添加用户；全量测试仍为 145 passed。
 
 ---
 
