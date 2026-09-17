@@ -836,7 +836,7 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查了五份核心文档 diff、链�
 
 ## TASK-028 — Authentication and Role Minimal Slice
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-027 DONE
 Owner: TASK-028 Worker + MAIN review
 Suggested branch: `feat/v2-auth`
@@ -852,9 +852,11 @@ Acceptance:
 
 Progress: 2026-09-17 09:49 可见 Task `01a0ad0c-4e33-7c42-8ae3-24b12d019510` 已从 `89ab84b` 创建独立 worktree `/Users/mac/.codex/worktrees/476d/personal-ai-kb-spec`，由 GPT-5.6 Luna Max Worker 执行；等待 Completion Report 和 MAIN 验收。
 
+Acceptance record: 2026-09-17 13:30 MAIN 验收 PASS，slice commit `80814a5`，merge commit `9b47739`（`--no-ff` 合入本地 `main`）。检查证据：`pytest` 116 passed（基线 98，新增 18）且仅存 TASK-003 已跟踪的上游 PyMuPDF／SWIG 警告；`uv lock --check` 通过。逐条 Acceptance：①`user_id = "u_" + sha256(issuer + "\0" + sub)` 与 `ARCHITECTURE.md §5.5` 一致，同一 token 重复调用结果相等，测试断言邮箱不出现在目录键中；②`Role`／`is_admin` 可区分，`role_mapping` 无匹配时抛 `unknown_role`，同一 `sub` 命中双角色抛 `conflicting_role`，均失败关闭；③仅读取 `Cf-Access-Jwt-Assertion` 且从不读 Cookie，`auth_enabled=False` 时不触碰 `st.context.headers`，认证失败 `st.error + st.stop()`，认证成功亦 `st.stop()`，在 TASK-029 完成前不进知识库，无共享 V1 回退；④auth 模块内无任何 `logging`／`print`，`IdentityContext` 的 `issuer`／`subject` 设 `repr=False`，`.env.example` 认证项为空，改动扫描无硬编码密钥。MAIN 清单其余项：diff 仅限约定 scope 且无无关重构；仅接受 RS256 且 JWKS 必须为 `issuer + /cdn-cgi/access/certs`、不接受请求自带公钥；无 `/Users` 硬编码与 macOS 专属 API；未触碰 Raw／Notes／Knowledge／Retrieval；新增 `pyjwt[crypto]` 属 `TECH_STACK.md` 授权的认证任务内依赖锁定。非阻塞观察（留待后续）：JWKS 每次认证重新拉取、无缓存，部署时评估；sidebar 身份卡片与 TASK-031 有轻微重叠，TASK-031 仍需补退出／重新登录入口。
+
 ## TASK-029 — User-scoped Storage and Retrieval Isolation
 
-Status: BLOCKED
+Status: READY
 Dependencies: TASK-028 PASS
 Suggested branch: `feat/v2-user-storage`
 
@@ -878,7 +880,7 @@ Suggested branch: `feat/v2-history`
 
 ## TASK-031 — UI Login State and Role Hint
 
-Status: BLOCKED
+Status: READY
 Dependencies: TASK-028 PASS
 Suggested branch: `feat/v2-ui-identity`
 
