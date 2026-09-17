@@ -7,10 +7,13 @@ script generation itself.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 from pkb.config import Settings, get_settings
+from pkb.history import HistoryRecord, HistoryStore
 from pkb.index import IndexBuilder, IndexFile
 from pkb.ingest import (
     IdeaCardImporter,
@@ -153,6 +156,7 @@ class UIService:
             self.paths = UIPaths.from_data_dir(user_root, user_id=identity.user_id)
         else:
             self.paths = paths or UIPaths.from_settings()
+        self.history_store = HistoryStore(self.paths.history_dir)
         # Core services keep MockAIProvider for deterministic unit tests.  The
         # user-facing UI must never present that fixture text as an AI answer.
         self.provider = provider if provider is not None else configured_provider()
@@ -330,7 +334,7 @@ class UIService:
     ) -> QAResult:
         """Answer from the local Knowledge, Notes, and Raw stores."""
 
-        return QAService(
+        result = QAService(
             index_path=self.paths.index_path,
             knowledge_dir=self.paths.knowledge_dir,
             notes_dir=self.paths.notes_dir,
@@ -338,6 +342,19 @@ class UIService:
             provider=self.provider,
             embedding_client=self.embedding_client if include_embeddings else None,
         ).answer(question, limit=limit)
+        if result is None:
+            return result
+        self._append_history(
+            HistoryRecord(
+                id=uuid4().hex,
+                kind="qa",
+                created_at=datetime.now(timezone.utc),
+                status=result.status,
+                question=question,
+                message=result.reason,
+            )
+        )
+        return result
 
     def synthesize_topic(self, topic: str) -> KnowledgeRecord:
         """Compile all existing Notes for one topic through the Core."""
@@ -351,11 +368,22 @@ class UIService:
     def generate_topics(self, *, limit: int = 5) -> TopicGenerationResult:
         """Generate explainable topic candidates from local persisted data."""
 
-        return TopicGenerator(
+        result = TopicGenerator(
             index_path=self.paths.index_path,
             knowledge_dir=self.paths.knowledge_dir,
             notes_dir=self.paths.notes_dir,
         ).generate(limit=limit)
+        self._append_history(
+            HistoryRecord(
+                id=uuid4().hex,
+                kind="topic",
+                created_at=datetime.now(timezone.utc),
+                status=result.status,
+                candidate_titles=[candidate.title for candidate in result.candidates],
+                message=result.message,
+            )
+        )
+        return result
 
     def write_script(
         self,
@@ -366,13 +394,35 @@ class UIService:
     ) -> ScriptResult:
         """Write only after confirmation; ScriptWriter performs fresh retrieval."""
 
-        return ScriptWriter(
+        result = ScriptWriter(
             index_path=self.paths.index_path,
             knowledge_dir=self.paths.knowledge_dir,
             notes_dir=self.paths.notes_dir,
             raw_dir=self.paths.raw_dir,
             provider=self.provider,
         ).write(selected_topic, confirmed=confirmed, limit=limit)
+        self._append_history(
+            HistoryRecord(
+                id=uuid4().hex,
+                kind="script",
+                created_at=datetime.now(timezone.utc),
+                status=result.status,
+                topic=result.topic,
+                script_title=result.title,
+                message=result.message,
+            )
+        )
+        return result
+
+    def list_history(self) -> list[HistoryRecord]:
+        """Return the current user's operation history in chronological order."""
+
+        return self.history_store.list_records()
+
+    def _append_history(self, record: HistoryRecord) -> None:
+        """Persist one history record without silently ignoring storage failures."""
+
+        self.history_store.append(record)
 
 
 __all__ = [
