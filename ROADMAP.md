@@ -856,7 +856,7 @@ Acceptance record: 2026-09-17 13:30 MAIN 验收 PASS，slice commit `80814a5`，
 
 ## TASK-029 — User-scoped Storage and Retrieval Isolation
 
-Status: READY
+Status: DONE
 Dependencies: TASK-028 PASS
 Suggested branch: `feat/v2-user-storage`
 
@@ -868,9 +868,11 @@ Acceptance:
 - 路径穿越、空用户标识、越权根目录和读写失败均被拒绝，不使用共享目录回退。
 - V1 本地单用户路径和 PDF／卡片／检索回归通过。
 
+Acceptance record: 2026-09-17 14:20 MAIN 验收 PASS，slice commit `4d2446e`，merge commit `3d216f9`（`--no-ff` 合入本地 `main`）。检查证据：`pytest` 124 passed（基线 116，新增 8）且仅存 TASK-003 已跟踪的上游 PyMuPDF／SWIG 警告；V1 本地路径回归通过。逐条 Acceptance：①`test_user_data_is_not_visible_to_other_user` 验证 Alice 与 Bob 的 idea card 互相不可检索，各用户 index 独立；②`validate_user_id` 拒绝空值、邮箱、`..`、长度非法等恶意标识，`resolve_user_root` 二次校验路径解析后仍位于 `data/users/` 下，`prepare_user_root` 失败时抛出可读错误；③`test_uipaths_v1_root_without_user_id` 与全量回归验证 V1 本地单用户路径不变。实现要点：`UIPaths` 根据 `user_id` 切换 `<data_dir>/users/<user_id>/` 或 V1 根目录；`UIService` 接受可选 `identity`，认证通过时自动准备用户隔离布局；`app.py` 认证成功后不再 `st.stop()`，而是将 identity 注入服务；核心存储／检索／问答服务内部无改动，仅通过目录参数实现隔离；`tests/conftest.py` 新增 `tmp_path` fixture 覆盖，把 pytest 临时目录限定在项目 `tests/_tmp/` 内，避免沙箱拦截系统 temp。
+
 ## TASK-030 — User-scoped History and Audit Records
 
-Status: BLOCKED
+Status: READY
 Dependencies: TASK-029 PASS
 Suggested branch: `feat/v2-history`
 
@@ -889,7 +891,7 @@ Suggested branch: `feat/v2-ui-identity`
 ## TASK-032 — Cloudflare Access／Tunnel and Tencent Cloud Deployment
 
 Status: BLOCKED
-Dependencies: TASK-029 PASS、TASK-031 PASS
+Dependencies: TASK-031 PASS
 Suggested branch: `feat/v2-cloud-deploy`
 
 目标：提供可复用的部署配置和操作文档，在测试域名完成健康检查与双身份验证。CVM 上的 Streamlit 仅监听本机，`cloudflared` 使用出站 Tunnel；持久化目录、重启恢复和源站不可绕过必须有证据。
