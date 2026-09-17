@@ -514,3 +514,126 @@ def test_v2_authentication_passes_streamlit_headers_to_the_adapter(monkeypatch):
 
     assert ui_app._identity_for_settings(settings, headers) is expected
     assert captured == {"settings": settings, "headers": headers}
+
+
+class _FakeSidebar:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, _value, _traceback):
+        return False
+
+
+class _FakeStreamlit:
+    def __init__(self):
+        self.markdown_calls = []
+        self.caption_calls = []
+        self.link_button_calls = []
+        self.sidebar = _FakeSidebar()
+
+    def markdown(self, body, **options):
+        self.markdown_calls.append((body, options))
+
+    def caption(self, body, **options):
+        self.caption_calls.append((body, options))
+
+    def link_button(self, label, url, **options):
+        self.link_button_calls.append((label, url, options))
+
+    def divider(self):
+        return None
+
+
+def test_v2_identity_status_uses_safe_fields_and_official_logout_path(monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_admin_secret",
+        role=Role.ADMIN,
+        display_name="Synthetic Admin",
+        issuer="https://access.example.test",
+        subject="subject-admin-secret",
+        email="admin@example.test",
+    )
+    fake = _FakeStreamlit()
+    monkeypatch.setattr(ui_app, "st", fake)
+
+    ui_app._render_identity_status(identity)
+
+    markdown = "\n".join(body for body, _options in fake.markdown_calls)
+    assert "当前登录身份" in markdown
+    assert "Synthetic Admin" in markdown
+    assert "管理员" in markdown
+    assert "已通过 Cloudflare Access 认证" in markdown
+    assert identity.user_id not in markdown
+    assert identity.subject not in markdown
+    assert identity.issuer not in markdown
+    assert identity.email not in markdown
+
+    assert fake.link_button_calls == [
+        (
+            "退出登录 / 重新登录",
+            "/cdn-cgi/access/logout",
+            {"use_container_width": True},
+        )
+    ]
+
+
+def test_identity_display_name_never_echoes_email_fallback():
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    email_fallback = IdentityContext(
+        user_id="u_email_only",
+        role=Role.MEMBER,
+        display_name="member@example.test",
+        issuer="https://access.example.test",
+        subject="subject-member",
+        email="member@example.test",
+    )
+    named = IdentityContext(
+        user_id="u_named",
+        role=Role.MEMBER,
+        display_name="成员 A",
+        issuer="https://access.example.test",
+        subject="subject-member",
+        email="member@example.test",
+    )
+
+    assert ui_app._identity_display_name(email_fallback) == "已认证用户"
+    assert ui_app._identity_display_name(named) == "成员 A"
+    assert ui_app._cloudflare_logout_url() == "/cdn-cgi/access/logout"
+
+
+def test_v2_sidebar_reports_scoped_storage_without_stale_pending_copy(monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    service = SimpleNamespace(paths=SimpleNamespace(data_dir="/sensitive/server/path"))
+    identity = IdentityContext(
+        user_id="u_bob_secret",
+        role=Role.MEMBER,
+        display_name="Bob",
+        issuer="https://access.example.test",
+        subject="subject-bob",
+        email="bob@example.test",
+    )
+    fake = _FakeStreamlit()
+    monkeypatch.setattr(ui_app, "st", fake)
+    monkeypatch.setattr(ui_app, "_render_provider_configuration", lambda: None)
+    monkeypatch.setattr(ui_app, "_render_embedding_configuration", lambda: None)
+
+    ui_app._render_sidebar(service, identity=identity)
+
+    rendered = "\n".join(
+        [body for body, _options in fake.markdown_calls]
+        + [body for body, _options in fake.caption_calls]
+    )
+    assert "数据按当前登录身份隔离" in rendered
+    assert "尚待后续任务接入" not in rendered
+    assert "/sensitive/server/path" not in rendered
+    assert identity.user_id not in rendered
+    assert identity.subject not in rendered
+    assert identity.issuer not in rendered
+    assert identity.email not in rendered
