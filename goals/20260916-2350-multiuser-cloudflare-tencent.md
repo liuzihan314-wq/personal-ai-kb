@@ -32,7 +32,7 @@
 
 ### TASK-028｜认证与角色最小闭环
 
-- 状态：READY。TASK-027 已由 MAIN 验收 PASS，可创建独立可见 Task 和 worktree。
+- 状态：IN_PROGRESS。可见 Task `01a0ad0c-4e33-7c42-8ae3-24b12d019510` 已从 `89ab84b` 创建，worktree 为 `/Users/mac/.codex/worktrees/476d/personal-ai-kb-spec`；由 GPT-5.6 Luna Max Worker 执行，等待 MAIN 验收。
 - 目标：在应用层解析 Cloudflare Access 身份头，提供明确的身份与角色对象，并对无身份／非法角色执行拒绝。
 - 允许修改：认证适配器、角色模型、相关单元测试；不得自行修改设计文档或 ROADMAP。
 - 验收：伪造测试请求可得到确定身份；管理员与成员权限不同；缺少身份时不会回退到共享用户。
@@ -103,7 +103,7 @@
 
 ## 当前交付状态
 
-- TASK-027 与 TASK-034 已完成 MAIN 验收，改动已整合进 `main` 工作区，尚未提交或推送。
-- TASK-027 的文档结论已解锁 TASK-028；TASK-029 至 TASK-033 继续按依赖顺序阻塞。
+- TASK-027 与 TASK-034 已完成 MAIN 验收，改动已提交为 `89ab84b`，尚未推送。
+- TASK-027 的文档结论已解锁 TASK-028，TASK-028 正在独立可见 Task 中执行；TASK-029 至 TASK-033 继续按依赖顺序阻塞。
 - 一次重复创建的 TASK-027 已立即中止并归档；对应线程 `01a0aaee-0abf-7ba1-ac60-a94ce720c4c7` 未产生改动。
 - V1 稳定基线仍为 `cd00dd2`；建议归档标签仍为 `v0.1.0-stable-cd00dd2`，实际创建和远端推送等待主人确认。

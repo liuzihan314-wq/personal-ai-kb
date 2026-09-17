@@ -836,8 +836,9 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查了五份核心文档 diff、链�
 
 ## TASK-028 — Authentication and Role Minimal Slice
 
-Status: READY
+Status: IN_PROGRESS
 Dependencies: TASK-027 DONE
+Owner: TASK-028 Worker + MAIN review
 Suggested branch: `feat/v2-auth`
 
 目标：在应用层通过 Streamlit 公开的 `st.context.headers` 解析 Cloudflare Access 的 `Cf-Access-Jwt-Assertion`，校验签名、issuer、audience、时间和 `sub`，生成明确的 `IdentityContext`，并对无身份、非法身份和未知／冲突角色失败关闭。
@@ -848,6 +849,8 @@ Acceptance:
 - `admin` 与 `member` 行为可区分；未知身份不能默认变成任何角色。
 - 缺少或伪造身份时不会回退到共享 V1 用户。
 - 不记录认证头、Cookie、密钥或真实凭据。
+
+Progress: 2026-09-17 09:49 可见 Task `01a0ad0c-4e33-7c42-8ae3-24b12d019510` 已从 `89ab84b` 创建独立 worktree `/Users/mac/.codex/worktrees/476d/personal-ai-kb-spec`，由 GPT-5.6 Luna Max Worker 执行；等待 Completion Report 和 MAIN 验收。
 
 ## TASK-029 — User-scoped Storage and Retrieval Isolation
 
@@ -934,7 +937,7 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 
 当前可以推进：
 
-- TASK-028 Authentication and Role Minimal Slice：TASK-027 已完成，可建立独立 worktree 派发
+- TASK-028 Authentication and Role Minimal Slice：已在独立可见 Task 与 worktree 中执行
 - TASK-017 Windows Core Smoke Test：仅在真实 Windows 10/11 环境可用后派发
 
 必须串行：
