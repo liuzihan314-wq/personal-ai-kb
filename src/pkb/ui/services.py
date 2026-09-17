@@ -19,7 +19,7 @@ from pkb.ingest import (
     WeChatImportResult,
 )
 from pkb.knowledge import KnowledgeCompiler, KnowledgeRecord
-from pkb.models import UnifiedDocument
+from pkb.models import IdentityContext, UnifiedDocument
 from pkb.notes import NoteGenerationResult, NoteService
 from pkb.providers import AIProvider, configured_provider, provider_from_values
 from pkb.qa import QAResult, QAService
@@ -30,6 +30,12 @@ from pkb.retrieval import (
     RetrievalService,
 )
 from pkb.scripts import ScriptResult, ScriptWriter
+from pkb.storage import (
+    UserScopeError,
+    prepare_user_root,
+    user_root_for_identity,
+    validate_user_id,
+)
 from pkb.topics import TopicCandidate, TopicGenerationResult, TopicGenerator
 
 
@@ -38,34 +44,65 @@ _EMBEDDING_UNSET = object()
 
 @dataclass(frozen=True)
 class UIPaths:
-    """The local directories used by the Streamlit entry point."""
+    """The local directories used by the Streamlit entry point.
+
+    When ``user_id`` is set, every content directory is scoped under
+    ``<data_dir>/users/<user_id>/``.  When it is unset the legacy V1 layout
+    under ``<data_dir>/`` is preserved so existing single-user deployments keep
+    working without migration.
+    """
 
     data_dir: Path
+    user_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.user_id is not None:
+            # Reuse the storage-layer validator so the rules stay in one place.
+            validate_user_id(self.user_id)
 
     @classmethod
-    def from_data_dir(cls, data_dir: str | Path) -> "UIPaths":
-        return cls(data_dir=Path(data_dir))
+    def from_data_dir(
+        cls,
+        data_dir: str | Path,
+        *,
+        user_id: str | None = None,
+    ) -> "UIPaths":
+        return cls(data_dir=Path(data_dir), user_id=user_id)
 
     @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> "UIPaths":
+    def from_settings(
+        cls,
+        settings: Settings | None = None,
+        *,
+        user_id: str | None = None,
+    ) -> "UIPaths":
         configured = settings or get_settings()
-        return cls.from_data_dir(configured.data_dir)
+        return cls.from_data_dir(configured.data_dir, user_id=user_id)
+
+    def _content_root(self, name: str) -> Path:
+        if self.user_id is not None:
+            return self.data_dir / "users" / self.user_id / name
+        return self.data_dir / name
 
     @property
     def raw_dir(self) -> Path:
-        return self.data_dir / "raw"
+        return self._content_root("raw")
 
     @property
     def notes_dir(self) -> Path:
-        return self.data_dir / "notes"
+        return self._content_root("notes")
 
     @property
     def knowledge_dir(self) -> Path:
-        return self.data_dir / "knowledge"
+        return self._content_root("knowledge")
 
     @property
     def index_path(self) -> Path:
-        return self.data_dir / "index" / "index.json"
+        return self._content_root("index") / "index.json"
+
+    @property
+    def history_dir(self) -> Path:
+        return self._content_root("history")
 
 
 @dataclass(frozen=True)
@@ -107,8 +144,15 @@ class UIService:
         *,
         provider: AIProvider | None = None,
         embedding_client: EmbeddingClient | None | object = _EMBEDDING_UNSET,
+        identity: IdentityContext | None = None,
     ) -> None:
-        self.paths = paths or UIPaths.from_settings()
+        if paths is not None and identity is not None:
+            raise ValueError("paths 和 identity 不能同时提供")
+        if identity is not None:
+            user_root = prepare_user_root(user_root_for_identity(get_settings(), identity))
+            self.paths = UIPaths.from_data_dir(user_root, user_id=identity.user_id)
+        else:
+            self.paths = paths or UIPaths.from_settings()
         # Core services keep MockAIProvider for deterministic unit tests.  The
         # user-facing UI must never present that fixture text as an AI answer.
         self.provider = provider if provider is not None else configured_provider()
