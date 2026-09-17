@@ -1,7 +1,7 @@
 # Personal AI Knowledge Base — ROADMAP.md
 
-> Version: v0.1  
-> Owner: MAIN Coordinator only  
+> Version: v0.2
+> Owner: MAIN Coordinator only
 > Rule: Worker Agents may read this file but must not edit task status, dependencies, ownership or milestones.
 
 ## 1. 目标
@@ -45,6 +45,8 @@ flowchart TD
     M5[M5 WeChat Input and Favorites POC]
     M6[M6 Web UI]
     M7[M7 Cross-platform Hardening]
+    M8[M8 V2 Multi-user Access]
+    M9[M9 GitHub Presentation]
 
     M0 --> M1
     M1 --> M2
@@ -54,6 +56,8 @@ flowchart TD
     M4 --> M6
     M5 -.Favorites POC 非阻塞.-> M6
     M6 --> M7
+    M6 --> M8
+    M6 --> M9
 ```
 
 ---
@@ -795,17 +799,152 @@ Acceptance:
 
 ---
 
+# M8 — V2 Multi-user Access
+
+V2 以当前稳定基线 `cd00dd2` 为起点。首期只验证两个受邀测试身份：管理员 A 和普通成员 B。Cloudflare Access 提供 HTTPS／登录入口，Cloudflare Tunnel／`cloudflared` 转发到腾讯云 CVM 上的现有 Python／Streamlit；应用按已校验身份隔离 `data/users/<user_id>/{raw,notes,knowledge,index,history}`。
+
+本里程碑的设计任务必须先于实现任务通过 MAIN 验收。V2 不是把 V1 的共享目录直接搬到云服务器；V1 的本地单用户模式、现有数据和回归能力必须保留。管理员首期只拥有运行维护和自己的知识库权限，不默认读取成员内容或全局历史。
+
+## TASK-027 — V2 Multi-user Architecture and Documentation Alignment
+
+Status: DONE
+Dependencies: `cd00dd2`（V1 stable baseline）
+Owner: TASK-027 Worker + MAIN review
+
+Scope:
+
+- 对齐 `PRODUCT.md`、`ARCHITECTURE.md`、`TECH_STACK.md` 和 `README.md` 的 V1／V2 边界，并向 MAIN 提交 `ROADMAP.md` 状态建议
+- 说明 Cloudflare Access、Tunnel、腾讯云 CVM、应用身份、`admin`／`member` 角色和用户目录隔离
+- 明确 Raw、Notes、Knowledge、Index、History、来源、下载和缓存的用户范围
+- 记录认证失败、非法角色、路径越权、存储失败、迁移和回滚边界
+
+Not in scope:
+
+- 业务代码、认证适配器、用户存储、UI 登录状态或生产部署
+- 真实域名、身份提供商、服务器规格、密钥、API Token 或生产配置
+- V1 数据迁移、版本 tag、GitHub 推送和远端写入
+
+Acceptance:
+
+1. 文档明确 V1 单用户本地模式仍可运行，以及保留它的离线、低运维和回滚价值。
+2. 文档明确 Access 入口、JWT 身份来源、`admin`／`member` 行为、`data/users/<user_id>/` 目录和 History 隔离。
+3. A 与 B 互不可读取、检索、下载或查看对方来源和历史；管理员不因角色自动获得成员数据权限。
+4. 无身份、非法 JWT、未知／冲突角色、非法路径和存储故障均失败关闭，不回退到共享目录。
+5. 文档没有把认证、云端部署、迁移或 V2 运行能力写成已完成；无真实凭据；五份核心文档约束一致。
+
+Acceptance record: 2026-09-17 09:42 MAIN 检查了五份核心文档 diff、链接、命令、凭据扫描和 V1／V2 一致性；保留 V1 本地单用户模式，确认 Access JWT、角色、用户根目录、历史隔离、失败关闭、迁移与回滚边界均为未实现规划。源码基线由并行 TASK-034 在同一 `cd00dd2` 基线上完成回归，结果为 `98 passed`。TASK-027 PASS。
+
+## TASK-028 — Authentication and Role Minimal Slice
+
+Status: READY
+Dependencies: TASK-027 DONE
+Suggested branch: `feat/v2-auth`
+
+目标：在应用层通过 Streamlit 公开的 `st.context.headers` 解析 Cloudflare Access 的 `Cf-Access-Jwt-Assertion`，校验签名、issuer、audience、时间和 `sub`，生成明确的 `IdentityContext`，并对无身份、非法身份和未知／冲突角色失败关闭。
+
+Acceptance:
+
+- 测试请求可得到稳定的内部身份和显示信息，用户目录键不直接使用邮箱。
+- `admin` 与 `member` 行为可区分；未知身份不能默认变成任何角色。
+- 缺少或伪造身份时不会回退到共享 V1 用户。
+- 不记录认证头、Cookie、密钥或真实凭据。
+
+## TASK-029 — User-scoped Storage and Retrieval Isolation
+
+Status: BLOCKED
+Dependencies: TASK-028 PASS
+Suggested branch: `feat/v2-user-storage`
+
+目标：将 Raw、Notes、Knowledge、Index、上传文件、导出文件、检索入口和用户内容型缓存绑定到当前用户根目录，并保留 V1 本地兼容根目录。
+
+Acceptance:
+
+- A 写入的资料在 B 的列表、检索、问答来源和下载入口中不可见，反向同样成立。
+- 路径穿越、空用户标识、越权根目录和读写失败均被拒绝，不使用共享目录回退。
+- V1 本地单用户路径和 PDF／卡片／检索回归通过。
+
+## TASK-030 — User-scoped History and Audit Records
+
+Status: BLOCKED
+Dependencies: TASK-029 PASS
+Suggested branch: `feat/v2-history`
+
+目标：按用户保存问答、选题和口播历史，并记录必要的操作时间与结果状态；历史不能被其他用户读取或静默覆盖。
+
+决策：V2 首期管理员不能查看成员全局历史。若未来需要审计成员内容，必须另立明确授权、只读范围和验收任务。
+
+## TASK-031 — UI Login State and Role Hint
+
+Status: BLOCKED
+Dependencies: TASK-028 PASS
+Suggested branch: `feat/v2-ui-identity`
+
+目标：在现有 Streamlit UI 显示当前登录身份、角色、重新登录／退出入口和可读错误，不显示完整认证头、密钥或服务器路径。
+
+## TASK-032 — Cloudflare Access／Tunnel and Tencent Cloud Deployment
+
+Status: BLOCKED
+Dependencies: TASK-029 PASS、TASK-031 PASS
+Suggested branch: `feat/v2-cloud-deploy`
+
+目标：提供可复用的部署配置和操作文档，在测试域名完成健康检查与双身份验证。CVM 上的 Streamlit 仅监听本机，`cloudflared` 使用出站 Tunnel；持久化目录、重启恢复和源站不可绕过必须有证据。
+
+限制：生产部署、DNS 修改、身份提供商配置、远端密钥写入和服务器权限变更必须由 MAIN 另行确认，不在前置文档任务中预授权。
+
+## TASK-033 — Dual-identity End-to-end and Security Regression
+
+Status: BLOCKED
+Dependencies: TASK-030 PASS、TASK-032 PASS
+Suggested branch: `test/v2-e2e-security`
+
+目标：以 A／B 执行导入、检索、问答、口播、历史和下载全流程，验证隔离、失败路径和 V1 回归，并形成发布前验收记录。
+
+Acceptance:
+
+- 两个身份通过同一 Access 入口到达应用并显示正确身份／角色。
+- A／B 的内容、来源、检索候选、下载和历史互不可见。
+- 无身份、非法 JWT、越权路径、角色错误、Tunnel／服务不可用和磁盘失败均有确定错误。
+- V1 既有测试与本地单用户最小闭环通过；无密钥、真实私人资料或未授权远端写入。
+
+---
+
+# M9 — GitHub Presentation
+
+## TASK-034 — GitHub Project Introduction and Demo Assets
+
+Status: DONE
+Dependencies: 无；与 TASK-027 并行执行
+Owner: MAIN + TASK-034 Worker
+
+目标：重写 README，突出真实产品价值、V1 闭环、当前边界、V2 路线、运行方式和黑客松演示路径；加入不含敏感数据的架构／数据流图或现有 UI 截图。
+
+允许修改：`README.md`、`docs/assets/` 下的展示素材及其引用；不得修改业务代码、密钥、ROADMAP 状态或推送远端。
+
+Acceptance:
+
+- 新用户能在 3 分钟内理解产品解决的问题、运行方式和演示步骤。
+- 所有命令与当前代码一致；图片在 GitHub 相对路径可渲染。
+- 不包含真实 API Key、个人数据或未实现功能的虚假承诺。
+
+Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整闭环、输入限制、演示路径、CLI 命令、Provider 与安全边界；SVG XML、相对引用、敏感信息扫描和本地渲染检查通过。Worker 在同一基线完成 `98 passed`、CLI help／health 和 Streamlit 入口导入验证。未执行远端推送或 GitHub 页面发布。TASK-034 PASS。
+
+---
+
 # 4. 当前调度策略
 
 当前可以推进：
 
-- TASK-026 Manual WeChat Article Import：依赖已完成，可派发
+- TASK-028 Authentication and Role Minimal Slice：TASK-027 已完成，可建立独立 worktree 派发
 - TASK-017 Windows Core Smoke Test：仅在真实 Windows 10/11 环境可用后派发
 
 必须串行：
 
 - TASK-017 PASS → TASK-019 Windows WeChat Favorites POC
 - TASK-019 PASS → TASK-018 Windows Scheduler Adapter
+- TASK-027 DONE → TASK-028 → TASK-029 → TASK-030
+- TASK-028 PASS → TASK-031
+- TASK-029、TASK-031 PASS → TASK-032
+- TASK-030、TASK-032 PASS → TASK-033
 
 继续阻塞：
 
@@ -813,6 +952,8 @@ Acceptance:
 - TASK-014 / TASK-015 等待 TASK-013 真实 PASS
 
 Manual WeChat Article Import 是 V1 主线；Favorites 自动同步 POC 不阻塞核心知识库。
+
+TASK-026 Manual WeChat Article Import、TASK-027 V2 文档对齐和 TASK-034 GitHub 展示均已完成，不再作为“可派发”任务重复列入。V2 认证、存储、历史和部署任务不能绕过已记录的依赖顺序。
 
 ---
 

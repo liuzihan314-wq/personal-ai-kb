@@ -1,8 +1,8 @@
 # Personal AI Knowledge Base — TECH_STACK.md
 
-> Version: v0.1  
-> Status: Approved draft for Codex handoff  
-> Based on: PRODUCT.md / ARCHITECTURE.md
+> Version: v0.2
+> Status: V1 baseline approved；V2 multi-user design proposal（未实现）
+> Based on: PRODUCT.md v0.2 / ARCHITECTURE.md v0.2
 
 ## 1. 选型原则
 
@@ -43,10 +43,26 @@
 - macOS 定时任务：launchd
 - Windows 定时任务：Task Scheduler adapter（备用）
 - AI：Provider abstraction，可插拔
-- V1 Retrieval：标题 / 标签 / 关键词 / Topic / Related / Index + AI 候选判断
+- V1 Retrieval：标题 / 标签 / 关键词 / Topic / Related / Index + 可选 embedding 语义召回；不使用向量数据库
 - Vector DB：V1 不使用
 - OCR：V1 不使用
 - 云服务器：V1 不使用
+
+### 2.1 V2 目标技术栈（规划，未实现）
+
+| 层 | 目标选型 | 责任边界 |
+| --- | --- | --- |
+| 公共入口 | Cloudflare Access 自托管 Web 应用 | HTTPS、登录、显式 Allow／Block 策略；不负责应用内数据隔离 |
+| 源站连接 | Cloudflare Tunnel／`cloudflared` | 通过出站连接把公开主机名转发到 CVM 本机服务；启用 Access JWT 校验；不把 Streamlit 端口公开 |
+| 运行主机 | 腾讯云 CVM（Linux，具体镜像和规格待 TASK-032 确认） | 运行现有 Python／Streamlit、`cloudflared` 和持久化文件系统 |
+| 应用身份层 | Python Auth Adapter + `IdentityContext` | 通过公开的 Streamlit `st.context.headers` 读取并校验 `Cf-Access-Jwt-Assertion`，解析 `iss`、`aud`、`exp`、`sub`，映射 `admin`／`member`；`user_id` 推荐为 `u_` + `sha256(iss + "\0" + sub)` |
+| 用户存储 | 文件系统 `data/users/<user_id>/` | 按用户保存 Raw、Notes、Knowledge、Index、History 及用户内容型缓存／导出 |
+| 业务层 | 现有 Core Services | 继续复用 Python、Streamlit、文件优先和可追溯知识链路 |
+| 进程管理 | Linux `systemd`（目标方案） | 管理 Streamlit 与 `cloudflared` 的启动、重启和日志；部署任务再验证具体服务单元 |
+
+V2 首期不新增数据库、消息队列、公开注册、跨用户共享或前后端分离工程。V1 的本地模式继续使用 `data/`，不能因为启用 V2 目标配置就自动迁移或覆盖现有数据。
+
+JWT 的签名校验库在 TASK-028 实施时确定并锁定；本任务不安装依赖、不修改 `pyproject.toml`，也不把 Cloudflare team、audience、身份或角色值写入仓库。实现必须以官方 Access 证书端点校验签名，并拒绝缺失或不匹配的 `iss`／`aud`／`exp`／`sub`。
 
 ---
 
@@ -83,6 +99,8 @@
 V1 不把 MySQL / PostgreSQL / MongoDB 作为主体存储。
 
 后续如果实际需要，可引入 SQLite 作为辅助索引，而不迁移 Raw / Notes / Knowledge 的核心事实文件。
+
+V2 首期同样不引入数据库：每个用户的 `Raw`、`Notes`、`Knowledge`、`Index` 和 `history` 都位于独立文件根目录。共享索引会破坏隔离，因此不作为 V2 首期优化手段；任何包含用户内容的缓存和导出也必须按用户命名空间保存。
 
 ---
 
@@ -170,6 +188,8 @@ V1 使用 Streamlit。
 
 V1 不做 React + 独立后端等重型前后端架构。
 
+V2 继续使用 Streamlit 作为应用入口，通过 Cloudflare Access 保护浏览器访问。UI 必须显示当前身份和角色，但不能显示完整认证头、密钥、服务器路径或其他用户的文件名；身份上下文由服务端注入 Core，不由页面控件传入。
+
 ---
 
 ## 8. CLI
@@ -231,7 +251,7 @@ Codex 主要承担：
 
 ## 10. Retrieval
 
-V1 不上 Vector DB。
+V1 不上 Vector DB；当前允许在本地 JSON Index 之上使用可配置的 embedding 语义召回，不能把它升级成云端向量数据库或替换 Raw → Notes → Knowledge 主链路。
 
 检索依据：
 
@@ -243,7 +263,7 @@ V1 不上 Vector DB。
 6. JSON Index
 7. AI 对候选集合进行语义判断
 
-保留 Retrieval 接口，后续如果几十到数百篇规模下真实效果不足，再增加 Hybrid / Embedding。
+保留 Retrieval 接口，后续如果几十到数百篇规模下真实效果不足，可调整 Hybrid／Embedding 的权重或缓存策略；不因此引入云端 Vector DB。
 
 ---
 
@@ -294,6 +314,13 @@ Manual 与 Favorites Adapter 都必须与 Core 解耦。Favorites POC 失败不�
 - Scheduler 通过 Windows adapter 接 Task Scheduler
 - Windows WeChat Favorites Adapter 属后续 POC，当前未验证
 - 不为 OS 建长期 Git 分支
+
+### V2 Tencent Cloud
+
+- 用户浏览器访问 Cloudflare Access 的 HTTPS 主机名；Access 通过显式 Allow 策略控制谁可以到达应用。
+- `cloudflared` 在腾讯云 CVM 建立出站 Tunnel，将请求转到仅监听本机的 Streamlit 服务；Tunnel 配置目标为 `originRequest.access.required=true` 和对应的 `audTag`，Tunnel 与服务状态都必须纳入健康检查。
+- CVM 的数据目录使用持久化文件系统，部署前备份，重启后验证 Raw、Notes、Knowledge、Index 和 History 均可读取。
+- 实例规格、地域、域名、身份提供商、备份目标和访问策略值待 TASK-032 确认；当前不提供生产命令，不写真实凭据。
 
 ---
 
@@ -394,6 +421,9 @@ data/logs/
 - Manual WeChat Article URL 白名单、Raw immutable 与去重
 - Favorites POC 的真实公众号文章、视频和普通 URL 分类证据
 - macOS / Windows 路径兼容的核心 smoke test
+- V2 Auth Adapter：缺失／伪造／过期 JWT、错误 issuer／audience、缺失 `sub`、未知／冲突角色和不可信身份头
+- V2 Storage：A／B 的 Raw、Notes、Knowledge、Index、历史、来源和下载互不可见；路径穿越、空用户标识和存储失败不会回退到共享目录
+- V2 deployment：Access 登录、Tunnel 转发、CVM 重启恢复、持久化目录和无身份拒绝
 
 ---
 
@@ -409,3 +439,21 @@ data/logs/
 - 前后端分离大工程
 - 小红书 / YouTube 自动读取
 - 自动视频生成 / 剪辑 / 发布
+
+V2 首期也不采用：
+
+- 公开注册和匿名访问
+- 管理员默认读取成员内容或全局历史
+- 共享全局 Index 或跨用户检索
+- 把 Cloudflare Access 的登录通过等同于应用内授权
+- 未备份的静默数据迁移
+
+## 17. V2 官方能力依据
+
+以下链接只用于核对目标架构，不表示本项目已经创建 Cloudflare 或腾讯云资源：
+
+- [Cloudflare Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/)：自托管应用需要显式策略控制访问。
+- [Cloudflare Access JWT validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)：应用应校验 `Cf-Access-Jwt-Assertion` 的签名。
+- [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/)：通过出站连接把源站服务发布到公开主机名，无需开放源站入站端口。
+- [腾讯云 CVM 文档](https://cloud.tencent.com/document/product/213)：CVM 提供运行应用所需的计算、存储和网络资源。
+- [Streamlit `st.context`](https://docs.streamlit.io/develop/api-reference/caching-and-state/st.context)：通过公开 API 读取当前请求的只读 headers，不依赖私有 WebSocket API。
