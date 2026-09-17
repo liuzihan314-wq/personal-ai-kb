@@ -461,3 +461,56 @@ def test_streamlit_entrypoint_module_is_importable():
     from pkb.ui import app
 
     assert callable(app.main)
+
+
+def test_v1_authentication_is_disabled_without_touching_streamlit_headers(monkeypatch):
+    from pkb.config import Settings
+    from pkb.ui import app as ui_app
+
+    class UnexpectedContext:
+        @property
+        def headers(self):
+            raise AssertionError("V1 must not inspect request headers")
+
+    monkeypatch.setattr(ui_app.st, "context", UnexpectedContext())
+
+    assert ui_app._identity_for_settings(Settings(_env_file=None)) is None
+
+
+def test_v2_authentication_passes_streamlit_headers_to_the_adapter(monkeypatch):
+    from pkb.auth import ACCESS_JWT_HEADER, IdentityContext, Role
+    from pkb.config import Settings
+    from pkb.ui import app as ui_app
+
+    settings = Settings(
+        _env_file=None,
+        auth_enabled=True,
+        auth_issuer="https://access.example.test",
+        auth_audience="synthetic-audience",
+        auth_jwks_url="https://access.example.test/certs",
+        auth_role_mapping="subject-admin=admin",
+    )
+    expected = IdentityContext(
+        user_id="u_synthetic",
+        role=Role.ADMIN,
+        display_name="Synthetic Admin",
+        issuer=settings.auth_issuer,
+        subject="subject-admin",
+    )
+    captured = {}
+
+    class FakeAuthenticator:
+        @classmethod
+        def from_settings(cls, received_settings):
+            captured["settings"] = received_settings
+            return cls()
+
+        def authenticate_headers(self, headers):
+            captured["headers"] = headers
+            return expected
+
+    monkeypatch.setattr(ui_app, "CloudflareAccessAuthenticator", FakeAuthenticator)
+    headers = {ACCESS_JWT_HEADER: "synthetic-token"}
+
+    assert ui_app._identity_for_settings(settings, headers) is expected
+    assert captured == {"settings": settings, "headers": headers}

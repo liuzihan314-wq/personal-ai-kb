@@ -148,6 +148,21 @@ cp .env.example .env
 
 需要注意的隐私边界：`Raw` 在本机保存，但配置真实 Provider 后，导入资料会发送到该 Provider 以生成 Notes，问答和口播也会发送当前检索出的上下文。请只处理自己有权使用的资料，并单独评估所选服务商的数据政策；未配置 Provider 时，页面不会把 Mock Provider 的测试文本当作真实回答。
 
+### V2 认证最小切片（实验性）
+
+TASK-028 已提供可测试的 Cloudflare Access JWT 适配器，但这不代表项目已经完成云端部署、多用户存储或权限隔离。V1 默认保持认证关闭；只有在明确配置 `PKB_AUTH_ENABLED=true`，并将应用放在已配置的 Access 入口后，Streamlit 才会读取只读的 `st.context.headers` 中的 `Cf-Access-Jwt-Assertion`。
+
+启用时必须同时提供以下非密钥配置：
+
+| 变量 | 作用 |
+| --- | --- |
+| `PKB_AUTH_ISSUER` | 预配置的 Access team issuer |
+| `PKB_AUTH_AUDIENCE` | 当前 Access application 的 audience tag |
+| `PKB_AUTH_JWKS_URL` | 可选；留空时由 issuer 推导 Access 官方证书端点 |
+| `PKB_AUTH_ROLE_MAPPING` | 受保护的 `sub=admin;sub=member` 映射；未知或冲突角色会被拒绝 |
+
+适配器只接受固定的 `RS256`，会校验签名、`iss`、`aud`、`exp`、`nbf`（如存在）和 `sub`；内部 `user_id` 根据 issuer 与 sub 的 SHA-256 生成，不直接使用邮箱。缺少令牌、校验失败、身份未配置角色或配置不完整都会停止本次请求，不回退到 V1 共享目录。当前 UI 在身份验证成功后也会暂不进入 V1 共享知识库，直到后续用户级存储任务完成；这不是多用户隔离已经完成的声明。真实 issuer、audience、身份映射和凭据不应写入仓库；合成 RSA 密钥、JWKS 和 JWT 仅用于测试。
+
 ## 数据目录与安全边界
 
 默认 `data_dir` 是项目根目录下的 `data/`；也可以通过配置中的 `PKB_DATA_DIR` 改为其他本地目录。典型结构如下：

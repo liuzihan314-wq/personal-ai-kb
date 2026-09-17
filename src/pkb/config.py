@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     embedding_base_url: str | None = None
     embedding_api_key: SecretStr | None = Field(default=None, repr=False)
 
+    # V2 authentication is opt-in.  Empty values keep the V1 local, single-
+    # user mode unchanged and do not cause the UI to inspect request headers.
+    auth_enabled: bool = False
+    auth_issuer: str | None = None
+    auth_audience: str | None = None
+    auth_jwks_url: str | None = None
+    auth_role_mapping: str | None = None
+
     @property
     def raw_dir(self) -> Path:
         """Return the directory reserved for immutable source material."""

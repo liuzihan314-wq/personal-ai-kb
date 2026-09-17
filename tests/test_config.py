@@ -24,6 +24,11 @@ def test_default_settings_are_local_and_non_secret(monkeypatch):
     assert settings.embedding_model is None
     assert settings.embedding_base_url is None
     assert settings.embedding_api_key is None
+    assert settings.auth_enabled is False
+    assert settings.auth_issuer is None
+    assert settings.auth_audience is None
+    assert settings.auth_jwks_url is None
+    assert settings.auth_role_mapping is None
 
 
 def test_settings_load_utf8_dotenv_and_mask_provider_secret(tmp_path):

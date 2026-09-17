@@ -9,6 +9,12 @@ from urllib.parse import urlparse
 import streamlit as st
 import streamlit.components.v1 as components
 
+from pkb.auth import (
+    AuthError,
+    AuthenticationError,
+    CloudflareAccessAuthenticator,
+    IdentityContext,
+)
 from pkb.config import get_settings, save_local_settings
 from pkb.retrieval import EmbeddingRequestError
 from pkb.ui.services import (
@@ -68,6 +74,29 @@ def _invalidate_results_after_ingest(state: Any) -> None:
 def _show_error(error: Exception) -> None:
     message = str(error).strip() or error.__class__.__name__
     st.error(message)
+
+
+def _identity_for_settings(
+    settings: Any,
+    headers: Any | None = None,
+) -> IdentityContext | None:
+    """Resolve V2 identity only when authentication is explicitly enabled."""
+
+    if not settings.auth_enabled:
+        return None
+    if headers is None:
+        try:
+            request_headers = st.context.headers
+        except (AttributeError, RuntimeError) as error:
+            raise AuthenticationError(
+                "headers_unavailable",
+                "当前 Streamlit 版本无法读取认证请求头",
+            ) from error
+    else:
+        request_headers = headers
+    return CloudflareAccessAuthenticator.from_settings(settings).authenticate_headers(
+        request_headers
+    )
 
 
 def _html(value: object) -> str:
@@ -339,7 +368,25 @@ def _render_embedding_configuration() -> None:
                 st.success("已保存到本机，已重新加载语义检索配置。")
 
 
-def _render_sidebar(service: UIService) -> None:
+def _render_identity_status(identity: IdentityContext) -> None:
+    """Show safe identity fields without exposing claims or server paths."""
+
+    st.markdown(
+        f"""
+        <div class="pkb-side-status">
+            <strong><span class="pkb-status-dot"></span>当前登录身份</strong>
+            <p>{_html(identity.display_name)} · 角色：{_html(identity.role.display_name)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_sidebar(
+    service: UIService,
+    *,
+    identity: IdentityContext | None = None,
+) -> None:
     with st.sidebar:
         st.markdown(
             """
@@ -362,8 +409,12 @@ def _render_sidebar(service: UIService) -> None:
         )
         st.divider()
         st.markdown('<div class="pkb-side-label">Storage</div>', unsafe_allow_html=True)
-        st.caption(f"数据目录：{service.paths.data_dir}")
-        st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
+        if identity is None:
+            st.caption(f"数据目录：{service.paths.data_dir}")
+            st.caption("V1 使用本地文件、可配置 AI Provider 和 JSON Index。")
+        else:
+            _render_identity_status(identity)
+            st.caption("V2 认证模式已启用；用户级数据隔离尚待后续任务接入。")
         _render_provider_configuration()
         _render_embedding_configuration()
 
@@ -1010,9 +1061,20 @@ def main(service: UIService | None = None) -> None:
     _install_translation_guard()
     _init_state()
     _render_theme()
+    settings = get_settings()
+    try:
+        identity = _identity_for_settings(settings)
+    except AuthError as error:
+        st.error(f"V2 认证失败：{error}")
+        st.stop()
     default_service = service or UIService()
 
-    _render_sidebar(default_service)
+    _render_sidebar(default_service, identity=identity)
+    if identity is not None:
+        st.warning(
+            "身份已验证。为避免在用户级隔离完成前读取 V1 共享数据，本次请求不会进入知识库。"
+        )
+        st.stop()
     active_service = default_service if service is not None else _service_for_current_session(default_service)
     _render_brand_header()
     _render_flow_overview()
