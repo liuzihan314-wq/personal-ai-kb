@@ -19,7 +19,9 @@ from pkb.auth import (
 )
 from pkb.models import Role
 from pkb.cli.main import app
-from pkb.config import get_settings
+from pkb.config import Settings, get_settings
+from pkb.providers import MockAIProvider
+from pkb.ui import UIService
 from typer.testing import CliRunner
 
 
@@ -172,6 +174,43 @@ def test_auth_add_local_user_command_writes_hashed_file(tmp_path: Path, monkeypa
     config = LocalAuthConfig.from_file(users_file)
     assert config.users["alice"].role is Role.MEMBER
     assert config.users["alice"].display_name == "Alice"
+
+
+def test_local_auth_binds_to_isolated_ui_service(tmp_path: Path, monkeypatch):
+    config = LocalAuthConfig(parse_local_users({
+        "alice": {
+            "password_hash": _hash("alice-password"),
+            "role": "admin",
+            "display_name": "Alice",
+        },
+        "bob": {
+            "password_hash": _hash("bob-password"),
+            "role": "member",
+            "display_name": "Bob",
+        },
+    }))
+    authenticator = LocalAuthenticator(config)
+    alice_identity = authenticator.authenticate_credentials("alice", "alice-password")
+    bob_identity = authenticator.authenticate_credentials("bob", "bob-password")
+
+    settings = Settings(
+        _env_file=None,
+        data_dir=str(tmp_path),
+        log_level="INFO",
+        auth_mode="local",
+        auth_local_users_file=tmp_path / "unused.json",
+    )
+    monkeypatch.setattr("pkb.ui.services.get_settings", lambda: settings)
+
+    alice = UIService(identity=alice_identity, provider=MockAIProvider())
+    bob = UIService(identity=bob_identity, provider=MockAIProvider())
+    alice.add_idea("Alice 的私有灵感", tags=["private"])
+    bob.add_idea("Bob 的私有灵感", tags=["private"])
+
+    assert len(bob.search("私有灵感").candidates) == 1
+    assert len(alice.search("私有灵感").candidates) == 1
+    assert bob.search("Alice").status == "no_hits"
+    assert alice.search("Bob").status == "no_hits"
 
 
 def test_update_local_users_file_rejects_duplicate_username(tmp_path: Path):
