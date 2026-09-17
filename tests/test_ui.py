@@ -529,6 +529,8 @@ class _FakeStreamlit:
         self.markdown_calls = []
         self.caption_calls = []
         self.link_button_calls = []
+        self.button_calls = []
+        self.rerun_called = False
         self.sidebar = _FakeSidebar()
 
     def markdown(self, body, **options):
@@ -539,6 +541,13 @@ class _FakeStreamlit:
 
     def link_button(self, label, url, **options):
         self.link_button_calls.append((label, url, options))
+
+    def button(self, label, **options):
+        self.button_calls.append((label, options))
+        return False
+
+    def rerun(self):
+        self.rerun_called = True
 
     def divider(self):
         return None
@@ -578,6 +587,45 @@ def test_v2_identity_status_uses_safe_fields_and_official_logout_path(monkeypatc
             {"use_container_width": True},
         )
     ]
+
+
+def test_local_identity_from_session_returns_stored_identity():
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_local_alice",
+        role=Role.MEMBER,
+        display_name="Alice",
+        issuer="local",
+        subject="alice",
+    )
+    state = {ui_app._LOCAL_IDENTITY_STATE_KEY: identity}
+    assert ui_app._local_identity_from_session(state) is identity
+    assert ui_app._local_identity_from_session({}) is None
+
+
+def test_local_identity_status_uses_local_logout_button(monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_local_alice",
+        role=Role.MEMBER,
+        display_name="Alice",
+        issuer="local",
+        subject="alice",
+    )
+    fake = _FakeStreamlit()
+    monkeypatch.setattr(ui_app, "st", fake)
+
+    ui_app._render_identity_status(identity, auth_mode="local")
+
+    markdown = "\n".join(body for body, _options in fake.markdown_calls)
+    assert "当前登录身份" in markdown
+    assert "已通过本地账号登录" in markdown
+    assert "Cloudflare Access" not in markdown
+    assert fake.button_calls[0][0] == "退出登录"
 
 
 def test_identity_display_name_never_echoes_email_fallback():

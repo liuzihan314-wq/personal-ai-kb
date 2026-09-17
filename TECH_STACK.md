@@ -62,6 +62,8 @@
 
 V2 首期不新增数据库、消息队列、公开注册、跨用户共享或前后端分离工程。V1 的本地模式继续使用 `data/`，不能因为启用 V2 目标配置就自动迁移或覆盖现有数据。
 
+已实现的无域名轻量分享模式使用 `PKB_AUTH_MODE=local` 和 `config/local_users.json`，认证成功后仍复用同一个 `UserScopedStorage`；它不替代 Cloudflare Access 的生产入口，仅用于低敏感朋友间分享。
+
 JWT 的签名校验库在 TASK-028 实施时确定并锁定；本任务不安装依赖、不修改 `pyproject.toml`，也不把 Cloudflare team、audience、身份或角色值写入仓库。实现必须以官方 Access 证书端点校验签名，并拒绝缺失或不匹配的 `iss`／`aud`／`exp`／`sub`。
 
 ---

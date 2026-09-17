@@ -6,6 +6,7 @@ from pathlib import Path
 
 import typer
 
+from pkb.auth import AuthConfigurationError, hash_password, update_local_users_file
 from pkb.config import Settings, get_settings
 from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
@@ -44,6 +45,65 @@ def hello(
     _load_settings()
     logger.debug("Running hello command")
     typer.echo(f"Hello, {name}!")
+
+
+@app.command("auth-hash-password")
+def auth_hash_password(
+    password: str = typer.Option(
+        ...,
+        "--password",
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="要生成哈希的本地账号密码。",
+    ),
+) -> None:
+    """Generate a PBKDF2 password hash without storing it."""
+
+    _load_settings()
+    typer.echo(hash_password(password))
+
+
+@app.command("auth-add-local-user")
+def auth_add_local_user(
+    username: str = typer.Argument(..., help="登录用户名，例如 alice。"),
+    password: str = typer.Option(
+        ...,
+        "--password",
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="本地账号密码，至少 8 个字符。",
+    ),
+    role: str = typer.Option(
+        "member",
+        "--role",
+        help="角色：admin 或 member。",
+    ),
+    display_name: str | None = typer.Option(
+        None,
+        "--display-name",
+        help="可选的界面显示名。",
+    ),
+) -> None:
+    """Add one local account to the configured user file."""
+
+    settings = _load_settings()
+    try:
+        encoded = hash_password(password)
+        target = update_local_users_file(
+            settings.auth_local_users_file,
+            username=username,
+            password_hash=encoded,
+            role=role,
+            display_name=display_name,
+        )
+    except AuthConfigurationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="username") from exc
+
+    typer.echo("status: saved")
+    typer.echo(f"username: {username}")
+    typer.echo(f"file: {target}")
 
 
 @app.command()
