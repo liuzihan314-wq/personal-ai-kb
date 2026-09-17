@@ -884,11 +884,13 @@ Acceptance record: 2026-09-17 17:05 MAIN 验收 PASS，slice commit `2cb65da`，
 
 ## TASK-031 — UI Login State and Role Hint
 
-Status: READY
+Status: DONE
 Dependencies: TASK-028 PASS
 Suggested branch: `feat/v2-ui-identity`
 
 目标：在现有 Streamlit UI 显示当前登录身份、角色、重新登录／退出入口和可读错误，不显示完整认证头、密钥或服务器路径。
+
+Acceptance record: 2026-09-17 17:26 MAIN 验收 PASS，slice commit `10e17ae`，merge commit `d1af2b5`（`--no-ff` 合入本地 `main`）。检查证据：`pytest` 132 passed（基线 129，新增 3）且仅存 TASK-003 已跟踪的上游 PyMuPDF／SWIG 警告；`uv lock --check` 通过。实现要点：侧边栏 V2 身份卡只显示安全显示名与角色，当 `display_name` 回退为邮箱时统一显示「已认证用户」，不渲染 `user_id`／`subject`／`issuer`／邮箱或用户目录绝对路径；新增 Cloudflare Access 官方退出路径 `/cdn-cgi/access/logout`，以浏览器相对路径解析当前 origin，避免硬编码生产域名或内部服务器路径；V2 提示改为「数据按当前登录身份隔离」，移除 TASK-029／TASK-030 完成前的过时说明。逐项验证：①`test_v2_identity_status_uses_safe_fields_and_official_logout_path` 验证身份、角色、认证状态与退出链接；②`test_identity_display_name_never_echoes_email_fallback` 验证邮箱回退不泄露邮箱；③`test_v2_sidebar_reports_scoped_storage_without_stale_pending_copy` 验证旧文案和敏感服务器路径不出现。认证失败路径沿用 TASK-028 的 `st.error + st.stop()`，本任务不修改认证适配器逻辑。
 
 ## TASK-032 — Cloudflare Access／Tunnel and Tencent Cloud Deployment
 
@@ -943,7 +945,6 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 
 当前可以推进：
 
-- TASK-031 UI Login State and Role Hint：READY，依赖 TASK-028 PASS
 - TASK-017 Windows Core Smoke Test：仅在真实 Windows 10/11 环境可用后派发
 
 必须串行：
@@ -951,9 +952,11 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 - TASK-017 PASS → TASK-019 Windows WeChat Favorites POC
 - TASK-019 PASS → TASK-018 Windows Scheduler Adapter
 - TASK-027 DONE → TASK-028 → TASK-029 → TASK-030 DONE
-- TASK-028 PASS → TASK-031
+- TASK-028 PASS → TASK-031 DONE
 - TASK-029、TASK-031 PASS → TASK-032
 - TASK-030、TASK-032 PASS → TASK-033
+
+V2 后续调度暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。
 
 继续阻塞：
 
