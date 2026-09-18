@@ -957,6 +957,8 @@ Acceptance:
 
 Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整闭环、输入限制、演示路径、CLI 命令、Provider 与安全边界；SVG XML、相对引用、敏感信息扫描和本地渲染检查通过。Worker 在同一基线完成 `98 passed`、CLI help／health 和 Streamlit 入口导入验证。未执行远端推送或 GitHub 页面发布。TASK-034 PASS。
 
+Follow-up record: 2026-09-18 10:24 MAIN 核对 GitHub 仓库为 Public、源码可通过 `Code → Download ZIP` 或 `git clone` 获取，当前没有正式 Release；本地 README 新增下载与启动说明、AI 学习／科研论文／销售聊天记录等适用场景、本地 Index 检索与 RAG／语义检索对比，并加入 4 张无敏感信息的 UI 截图。`git diff --check`、图片文件存在性、README 关键链接与敏感信息扫描通过；本次改动仍未提交或推送远端。
+
 ---
 
 # 4. 当前调度策略

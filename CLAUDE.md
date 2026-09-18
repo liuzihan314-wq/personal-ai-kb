@@ -18,6 +18,7 @@
 - Worker 进入可验收状态前，必须将实现提交到对应任务分支，并确认 branch 指针指向最新实现。未提交改动只能作为 BLOCKED 或返工上下文报告；MAIN 不得把仅存在于独立 worktree 的未提交改动视为可验收完成态。
 - MAIN 持续推进所有依赖满足、范围清晰且互不冲突的后续任务。只有需求或架构存在关键歧义、明显超出范围、高风险或不可逆操作、新增外部账号/权限/付费、需要数据迁移、连续失败须改变技术路线，或存在重要业务方案待决定时，才暂停请求用户决定。
 - MAIN 必须维护 Active Task ledger（Task ID、正式 Thread ID 或 clientThreadId、branch、worktree、验收状态）。Worker Completion Report 是首选信号，但不是唯一信号：每次收到项目工作、每次调度检查或自动心跳时，MAIN 都要核对可见 Task 状态及每个 Active worktree 的 `git status` / branch log。发现未报告的完成性变更时，MAIN 直接进入验收，不能把“没有正式 Thread ID”误判为“没有任务结果”。
+- 每个 TASK 执行结束后，无论成功、失败、功能是否全部完成、是否完成合并或是否通过验收，MAIN 都必须在主线程用 Markdown 表格输出该 TASK 的多维度结果。表格至少包含：Task ID 与名称、最终状态、已实现功能、验证结果、失败或未通过的具体项目及证据、未完成／待实现功能、阻塞原因、下一步执行的 TASK、依赖条件、验收结论，以及 branch、worktree 和 commit。成功时明确写出失败项／待实现功能为“无”；失败或未完成时不得只用“失败”“继续修复”或“待处理”等笼统表述，必须说明原 Worker 返工范围、修复后的验收标准，并不得标记 DONE 或提前解锁依赖任务。
 
 ## Directory contract
 
