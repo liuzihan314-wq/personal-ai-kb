@@ -961,6 +961,8 @@ Follow-up record: 2026-09-18 10:24 MAIN 核对 GitHub 仓库为 Public、源码�
 
 Follow-up record: 2026-09-18 10:36 MAIN 从 GitHub `main` 全新克隆验证 README 路径：首次直接执行 `uv sync` 在未安装 `uv` 的环境中按预期提示命令不存在；补充 uv 官方安装说明后，使用已安装 `uv 0.12.15` 完成 `uv sync`，`uv run pkb health` 返回 `status: ok`，全量测试 `145 passed`，Streamlit 启动与 `_stcore/health` 均返回 HTTP 200。当前 README 已覆盖首次安装 uv 的前置步骤；本次修订尚未提交或推送远端。
 
+Follow-up record: 2026-09-18 10:42 MAIN 基于已推送的 `main` 提交 `3ce86e7` 创建并发布 GitHub Release `v0.1.0`，同步创建标签 `v0.1.0`。公开发布页、标签指向提交、发布说明和 Latest 状态核对通过；发布说明已列出安装步骤、145 条测试通过、Streamlit 健康检查和当前功能边界。
+
 ---
 
 # 4. 当前调度策略
