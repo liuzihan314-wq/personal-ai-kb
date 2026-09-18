@@ -29,7 +29,21 @@ cd personal-ai-kb
 
 ### 最短启动路径
 
-需要 Python 3.12 和 `uv`。进入项目目录后执行：
+需要 Python 3.12 和 `uv`。如果终端提示 `uv: command not found`，请先按 [uv 官方安装说明](https://docs.astral.sh/uv/getting-started/installation/) 安装。
+
+macOS／Linux 可以执行：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows PowerShell 可以执行：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+安装完成后重新打开终端，并确认 `uv --version` 能输出版本号，再进入项目目录执行：
 
 ```bash
 uv sync

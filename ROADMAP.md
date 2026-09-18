@@ -959,6 +959,8 @@ Acceptance record: 2026-09-17 09:42 MAIN 检查 README 产品价值、V1 完整�
 
 Follow-up record: 2026-09-18 10:24 MAIN 核对 GitHub 仓库为 Public、源码可通过 `Code → Download ZIP` 或 `git clone` 获取，当前没有正式 Release；本地 README 新增下载与启动说明、AI 学习／科研论文／销售聊天记录等适用场景、本地 Index 检索与 RAG／语义检索对比，并加入 4 张无敏感信息的 UI 截图。`git diff --check`、图片文件存在性、README 关键链接与敏感信息扫描通过；本次改动仍未提交或推送远端。
 
+Follow-up record: 2026-09-18 10:36 MAIN 从 GitHub `main` 全新克隆验证 README 路径：首次直接执行 `uv sync` 在未安装 `uv` 的环境中按预期提示命令不存在；补充 uv 官方安装说明后，使用已安装 `uv 0.12.15` 完成 `uv sync`，`uv run pkb health` 返回 `status: ok`，全量测试 `145 passed`，Streamlit 启动与 `_stcore/health` 均返回 HTTP 200。当前 README 已覆盖首次安装 uv 的前置步骤；本次修订尚未提交或推送远端。
+
 ---
 
 # 4. 当前调度策略
