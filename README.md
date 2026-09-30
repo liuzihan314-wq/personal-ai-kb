@@ -237,15 +237,16 @@ V1 默认 `PKB_AUTH_ENABLED=false`，维护者本机通过 `output/打开知识�
 
 #### 邀请码模式（当前访客路线）
 
-邀请码能力已经完成本地实现和合成 E2E 验证，但正式公网部署仍未完成。每位访客应获得一个独立、可撤销、可重复使用的邀请码；邀请码必须通过私密渠道发送，并且公网入口必须使用 HTTPS。
+邀请码能力已经完成本地实现和合成 E2E 验证，但正式公网部署仍未完成。每位访客应获得一个独立、可撤销、可重复使用的邀请码；邀请码必须通过私密渠道发送，并且公网入口必须使用 HTTPS。邀请码有两种 API 模式：`shared` 使用主人配置的 API，`byok` 要求访客填写自己的 API。
 
 创建邀请码：
 
 ```bash
 uv run pkb invite-create --name "张三"
+uv run pkb invite-create --name "李四" --api-mode byok
 ```
 
-命令会输出 `invite_id` 和一次明文 `code`。把 `code` 通过私密渠道发给对应访客；系统只在 `config/invites.json` 中保存 PBKDF2 哈希，不保存明文，也不会在 `invite-list` 中再次显示。
+命令会输出 `invite_id`、`api_mode` 和一次明文 `code`。`shared` 是默认模式，访客直接使用主人在服务器上配置的 AI 服务；`byok`（Bring Your Own Key）模式下，访客登录后必须在侧边栏填写自己的聊天 Provider 和可选的 Embedding API，系统不会回退使用主人配置。把 `code` 通过私密渠道发给对应访客；系统只在 `config/invites.json` 中保存 PBKDF2 哈希，不保存明文，也不会在 `invite-list` 中再次显示。
 
 查看和撤销邀请码：
 
@@ -265,6 +266,8 @@ PKB_AUTH_INVITES_FILE=config/invites.json
 ```
 
 邀请码相当于登录凭据，只能通过 HTTPS 传输。当前实现提供应用层认证和数据目录隔离，但尚未完成域名、HTTPS、反向代理、服务器磁盘备份和正式生产部署。
+
+`byok` 访客在侧边栏填写的 API 只保留在当前网页会话，不写入主人 `.env`、邀请码文件或 Git。请求仍会经过部署知识库的服务器，因此正式公网使用仍必须配置 HTTPS，并应向访客说明这一点。访客如果把项目下载到自己的电脑单独运行，则使用的是自己的本地配置，不需要主人提供 API。
 
 #### 历史兼容实现
 
@@ -288,7 +291,7 @@ data/
 - `Raw`、`Notes`、`Knowledge` 和 `Index` 分层保存，AI 不能用 Notes 或 Knowledge 覆盖 Raw。
 - `.gitignore` 排除 `.env`、`data/`、`runtime/` 和 `output/`；不要执行 `git add .` 来绕过逐项复核。
 - 默认 V1 没有加密和公开服务的安全边界；本机主人启动器只绑定 `127.0.0.1`。邀请码实例必须单独部署在 HTTPS 入口后，不要把免登录 Streamlit 直接暴露到公网。
-- 页面保存的 `.env` 会限制为当前系统用户可读写，Provider 密钥以密码输入、不显示、不写日志；这不替代操作系统权限和服务商侧的密钥管理。
+- 主人模式下，页面保存的 `.env` 会限制为当前系统用户可读写；Provider 密钥以密码输入、不显示、不写日志。`byok` 访客模式不写入 `.env`，只保留当前网页会话。以上措施不替代操作系统权限和服务商侧的密钥管理。
 
 ## 后续部署规划：Cloudflare Access ＋ 腾讯云（非当前入口）
 

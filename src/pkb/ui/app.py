@@ -19,6 +19,7 @@ from pkb.auth import (
 )
 from pkb.config import get_settings, save_local_settings
 from pkb.retrieval import EmbeddingRequestError
+from pkb.providers import UnconfiguredProvider
 from pkb.ui.services import (
     IngestResult,
     UIService,
@@ -53,6 +54,7 @@ _INGEST_INVALIDATED_STATE = (
 
 _CLOUDFLARE_LOGOUT_PATH = "/cdn-cgi/access/logout"
 _LOCAL_IDENTITY_STATE_KEY = "_local_identity"
+_INVITE_API_IDENTITY_STATE_KEY = "_invite_api_identity"
 
 
 def _init_state() -> None:
@@ -255,15 +257,20 @@ def _saved_embedding_values() -> dict[str, str] | None:
     return values if all(values.values()) else None
 
 
-def _render_provider_configuration() -> None:
-    """Render the local Provider configuration form without exposing its key."""
+def _render_provider_configuration(*, session_only: bool = False) -> None:
+    """Render the Provider form, optionally without persisting credentials."""
 
-    current = _provider_session_values() or _saved_provider_values() or {}
-    saved = _saved_provider_values() is not None
+    current = _provider_session_values() or (
+        {} if session_only else _saved_provider_values() or {}
+    )
+    saved = not session_only and _saved_provider_values() is not None
     with st.expander("AI 服务设置", expanded=not bool(current)):
         if saved:
             st.success("已从本机 .env 加载。重启电脑或关闭网页后仍会自动使用。")
-        st.caption("保存后写入本项目根目录的本机 .env；密钥不显示、不写日志，也不会提交到 Git。")
+        if session_only:
+            st.caption("使用你自己的 API；只保留在当前网页会话，不会写入主人配置或项目文件。")
+        else:
+            st.caption("保存后写入本项目根目录的本机 .env；密钥不显示、不写日志，也不会提交到 Git。")
         with st.form("provider_configuration_form"):
             provider_label = st.selectbox(
                 "服务商",
@@ -286,7 +293,10 @@ def _render_provider_configuration() -> None:
                 value="",
                 placeholder="粘贴你的 API Key",
             )
-            apply = st.form_submit_button("保存到本机并应用", use_container_width=True)
+            apply = st.form_submit_button(
+                "仅本次会话应用" if session_only else "保存到本机并应用",
+                use_container_width=True,
+            )
         if apply:
             provider_key = api_key.strip() or current.get("api_key", "")
             if not all(value.strip() for value in (model, base_url, provider_key)):
@@ -300,23 +310,30 @@ def _render_provider_configuration() -> None:
                     "base_url": base_url.strip(),
                     "api_key": provider_key,
                 }
-                save_local_settings(
-                    {
-                        "PKB_AI_PROVIDER": session_values["provider_name"],
-                        "PKB_AI_MODEL": session_values["model"],
-                        "PKB_AI_BASE_URL": session_values["base_url"],
-                        "PKB_AI_API_KEY": session_values["api_key"],
-                    }
-                )
+                if not session_only:
+                    save_local_settings(
+                        {
+                            "PKB_AI_PROVIDER": session_values["provider_name"],
+                            "PKB_AI_MODEL": session_values["model"],
+                            "PKB_AI_BASE_URL": session_values["base_url"],
+                            "PKB_AI_API_KEY": session_values["api_key"],
+                        }
+                    )
                 st.session_state["provider_session"] = session_values
-                st.success("已保存到本机，之后会自动加载。")
+                st.success(
+                    "已应用你的 API；当前网页会话会使用它。"
+                    if session_only
+                    else "已保存到本机，之后会自动加载。"
+                )
 
 
-def _render_embedding_configuration() -> None:
-    """Render the local Embedding configuration form without exposing its key."""
+def _render_embedding_configuration(*, session_only: bool = False) -> None:
+    """Render Embedding settings, optionally without persisting credentials."""
 
-    current = _embedding_session_values() or _saved_embedding_values() or {}
-    saved = _saved_embedding_values() is not None
+    current = _embedding_session_values() or (
+        {} if session_only else _saved_embedding_values() or {}
+    )
+    saved = not session_only and _saved_embedding_values() is not None
     embedding_keys = ("embedding_model", "embedding_base_url", "embedding_api_key")
     enabled = all(current.get(key, "").strip() for key in embedding_keys)
     with st.expander("语义检索 / DashScope Embedding", expanded=not enabled):
@@ -326,6 +343,8 @@ def _render_embedding_configuration() -> None:
             st.info("当前为仅直接检索；配置后才会启用语义向量召回。")
         if saved:
             st.caption("配置已从本机 .env 自动加载。")
+        elif session_only:
+            st.caption("使用你自己的向量模型 API；只保留在当前网页会话，不会写入主人配置或项目文件。")
         else:
             st.caption("保存后写入本项目根目录的本机 .env；密钥不显示、不写日志，也不会提交到 Git。")
         with st.form("embedding_configuration_form"):
@@ -344,7 +363,10 @@ def _render_embedding_configuration() -> None:
                 value="",
                 placeholder="粘贴 Embedding API Key",
             )
-            apply = st.form_submit_button("保存语义检索配置", use_container_width=True)
+            apply = st.form_submit_button(
+                "仅本次会话应用" if session_only else "保存语义检索配置",
+                use_container_width=True,
+            )
         if apply:
             key = api_key.strip() or current.get("embedding_api_key", "")
             values = (model.strip(), base_url.strip(), key)
@@ -359,18 +381,21 @@ def _render_embedding_configuration() -> None:
                     "embedding_base_url": values[1],
                     "embedding_api_key": values[2],
                 }
-                save_local_settings(
-                    {
-                        "PKB_EMBEDDING_MODEL": values[0],
-                        "PKB_EMBEDDING_BASE_URL": values[1],
-                        "PKB_EMBEDDING_API_KEY": values[2],
-                    }
-                )
-                # Saved settings are the durable source of truth.  Dropping a
-                # previous browser-only binding prevents an old endpoint from
-                # overriding the just-saved configuration on later searches.
-                st.session_state["embedding_session"] = None
-                st.success("已保存到本机，已重新加载语义检索配置。")
+                if not session_only:
+                    save_local_settings(
+                        {
+                            "PKB_EMBEDDING_MODEL": values[0],
+                            "PKB_EMBEDDING_BASE_URL": values[1],
+                            "PKB_EMBEDDING_API_KEY": values[2],
+                        }
+                    )
+                    # Saved settings are the durable source of truth.  Dropping a
+                    # previous browser-only binding prevents an old endpoint from
+                    # overriding the just-saved configuration on later searches.
+                    st.session_state["embedding_session"] = None
+                    st.success("已保存到本机，已重新加载语义检索配置。")
+                else:
+                    st.success("已应用你的向量模型 API；当前网页会话会使用它。")
 
 
 def _local_identity_from_session(
@@ -453,7 +478,26 @@ def _render_session_identity_status(
     )
     if st.button("退出登录", key="local_logout", use_container_width=True):
         st.session_state.pop(_LOCAL_IDENTITY_STATE_KEY, None)
+        if auth_mode == "invite":
+            _clear_invite_api_session()
         st.rerun()
+
+
+def _clear_invite_api_session() -> None:
+    """Drop guest API bindings so a later identity cannot reuse them."""
+
+    st.session_state["provider_session"] = None
+    st.session_state["embedding_session"] = None
+    st.session_state.pop(_INVITE_API_IDENTITY_STATE_KEY, None)
+
+
+def _bind_invite_api_session(identity: IdentityContext) -> None:
+    """Bind ephemeral guest API settings to exactly one invitation identity."""
+
+    previous_user_id = st.session_state.get(_INVITE_API_IDENTITY_STATE_KEY)
+    if previous_user_id != identity.user_id:
+        _clear_invite_api_session()
+        st.session_state[_INVITE_API_IDENTITY_STATE_KEY] = identity.user_id
 
 
 def _cloudflare_logout_url() -> str:
@@ -511,6 +555,7 @@ def _render_sidebar(
     *,
     identity: IdentityContext | None = None,
     auth_mode: str = "cloudflare",
+    invite_api_mode: str | None = None,
 ) -> None:
     with st.sidebar:
         st.markdown(
@@ -545,8 +590,18 @@ def _render_sidebar(
                 st.caption("邀请码模式已启用；每个邀请码的数据完全隔离。")
             else:
                 st.caption("V2 认证已启用；数据按当前登录身份隔离。")
-        if auth_mode == "invite":
-            st.caption("AI 服务由知识库主人统一配置，访客不能修改服务器设置。")
+        invite_session = (
+            auth_mode == "invite"
+            and identity is not None
+            and invite_api_mode == "byok"
+        )
+        if invite_session:
+            _bind_invite_api_session(identity)
+            _render_provider_configuration(session_only=True)
+            _render_embedding_configuration(session_only=True)
+        elif auth_mode == "invite" and identity is not None:
+            _clear_invite_api_session()
+            st.caption("此邀请码使用知识库主人配置的 AI 服务。")
         else:
             _render_provider_configuration()
             _render_embedding_configuration()
@@ -586,6 +641,32 @@ def _service_for_current_session(default_service: UIService) -> UIService:
         _provider_session_values(),
         _embedding_session_values(),
     )
+
+
+def _default_service_for_identity(
+    service: UIService | None,
+    settings: Any,
+    identity: IdentityContext | None,
+    invite_api_mode: str | None = None,
+) -> UIService:
+    """Build the default service without leaking owner credentials to guests."""
+
+    if service is not None:
+        return service
+    if (
+        settings.auth_enabled
+        and settings.auth_mode == "invite"
+        and identity is not None
+        and invite_api_mode == "byok"
+    ):
+        return UIService(
+            identity=identity,
+            provider=UnconfiguredProvider(
+                "请在侧边栏填写你自己的 AI Provider 配置后再使用生成类功能。"
+            ),
+            embedding_client=None,
+        )
+    return UIService(identity=identity)
 
 
 def _render_section_header(
@@ -1195,18 +1276,21 @@ def main(service: UIService | None = None) -> None:
     _init_state()
     _render_theme()
     settings = get_settings()
+    invite_api_mode: str | None = None
     if settings.auth_enabled and settings.auth_mode in {"local", "invite"}:
         identity = _local_identity_from_session()
         if identity is not None and settings.auth_mode == "invite":
             try:
-                invitation_active = InviteAuthenticator.from_settings(
-                    settings
-                ).is_identity_active(identity)
+                authenticator = InviteAuthenticator.from_settings(settings)
+                invitation_active = authenticator.is_identity_active(identity)
+                if invitation_active:
+                    invite_api_mode = authenticator.api_mode_for_identity(identity)
             except AuthError as error:
                 st.error(f"邀请码状态检查失败：{error}")
                 st.stop()
             if not invitation_active:
                 st.session_state.pop(_LOCAL_IDENTITY_STATE_KEY, None)
+                _clear_invite_api_session()
                 identity = None
                 st.warning("邀请码已失效，请使用新的邀请码重新进入。")
         if identity is None:
@@ -1222,12 +1306,20 @@ def main(service: UIService | None = None) -> None:
             st.error(f"V2 认证失败：{error}")
             st.stop()
 
-    default_service = service or UIService(identity=identity)
+    # Invite users must opt into their own provider and embedding settings;
+    # never fall back to the server owner's .env credentials.
+    default_service = _default_service_for_identity(
+        service,
+        settings,
+        identity,
+        invite_api_mode,
+    )
 
     _render_sidebar(
         default_service,
         identity=identity,
         auth_mode=settings.auth_mode,
+        invite_api_mode=invite_api_mode,
     )
     active_service = default_service if service is not None else _service_for_current_session(default_service)
     _render_brand_header()

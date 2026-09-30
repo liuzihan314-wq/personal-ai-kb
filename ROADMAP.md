@@ -972,6 +972,27 @@ Follow-up documentation record: 2026-09-30 16:19 MAIN 将 GitHub 公开说明统
 
 ---
 
+## TASK-037 — Invite API Ownership Modes
+
+Status: DONE
+Dependencies: TASK-036
+Product status: CURRENT；邀请码可按访客是否自带 API 分为两种模式。
+
+目标：为邀请码增加两种清晰的 API 使用策略：`shared` 让访客使用主人部署的 API；`byok`（Bring Your Own Key）要求访客在自己的网页会话中填写聊天 Provider 和可选 Embedding API，且禁止回退到主人配置。
+
+Acceptance:
+
+- `invite-create` 支持 `--api-mode shared|byok`，旧邀请码缺少字段时保持 `shared` 兼容行为。
+- `shared` 邀请码不显示访客 API 配置入口，使用服务器已配置的 Provider 和 Embedding。
+- `byok` 邀请码显示访客自己的 API 配置入口；配置只保留当前网页会话，不写入服务器 `.env`、邀请码文件、日志或 Git。
+- `byok` 邀请码未配置 API 时，AI 生成类功能明确提示访客配置自己的 API，不得使用主人 API；未配置 Embedding 时继续使用直接检索。
+- 退出登录或切换邀请码后，不能复用上一个访客的 API 配置。
+- CLI、邀请认证、UI 会话、API 回退和数据隔离均有回归测试；README 与 ROADMAP 说明两种模式和 HTTPS 边界。
+
+Acceptance record: 2026-09-30 17:31 MAIN 验收通过。`shared` 邀请码使用服务器主人配置且不显示访客配置入口；`byok` 邀请码显示聊天 Provider 与 Embedding 配置，仅保留当前网页会话，明确禁止回退主人 API；切换身份和退出登录会清理访客 API 会话。新增 CLI、旧配置兼容、默认服务防回退、UI 模式和会话隔离回归测试；全量 `pytest` 163 passed，仅有 5 条已知 PyMuPDF／SWIG 上游警告。Streamlit AppTest 验证两种页面入口，8510 端口启动健康检查返回 `ok`；`uv lock --check`、`zsh -n output/打开知识库.command`、`uv build` 和 `git diff --check` 通过。正式公网域名、HTTPS、反向代理、服务器备份和生产部署仍未完成。
+
+---
+
 # M9 — GitHub Presentation
 
 ## TASK-034 — GitHub Project Introduction and Demo Assets
@@ -1017,7 +1038,7 @@ Follow-up record: 2026-09-18 10:42 MAIN 基于已推送的 `main` 提交 `3ce86e
 
 V2 Cloudflare Access／腾讯云正式部署调度仍暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。该路线不是当前邀请码入口的必要依赖。
 
-当前访客分享路线以 TASK-036 为准：本机主人免登录，公网访客使用独立、可撤销、可重复使用的邀请码。邀请码功能已完成本地实现和合成 E2E 验证，但正式域名、HTTPS、反向代理、服务器备份和生产部署仍未完成。
+当前访客分享路线以 TASK-036、TASK-037 为准：本机主人免登录，公网访客使用独立、可撤销、可重复使用的邀请码；邀请码可选择 `shared` 共用主人 API 或 `byok` 使用访客自己的 API。正式域名、HTTPS、反向代理、服务器备份和生产部署仍未完成。
 
 TASK-035 的本地账号密码模式已完成历史验证，但不再作为当前分享入口；本地 `feat/v2-local-auth` 分支仅保留为历史开发分支，不代表 GitHub 当前主线。
 

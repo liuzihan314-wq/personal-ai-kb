@@ -24,6 +24,7 @@ from pkb.auth.local import (
 )
 from pkb.auth.invite import (
     CreatedInvitation,
+    InviteAPIMode,
     InvitationConfig,
     InvitationRecord,
     InviteAuthenticator,
@@ -47,6 +48,7 @@ __all__ = [
     "IdentityContext",
     "InvitationConfig",
     "InvitationRecord",
+    "InviteAPIMode",
     "InviteAuthenticator",
     "LocalAuthConfig",
     "LocalAuthenticator",
