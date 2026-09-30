@@ -8,7 +8,7 @@ from pkb.index import IndexBuilder, IndexEntry, IndexFile, write_index
 from pkb.knowledge import KnowledgeSource, KnowledgeStorage, TopicKnowledge
 from pkb.models import UnifiedDocument
 from pkb.notes import Note, NoteStorage
-from pkb.providers import MockAIProvider, OpenAICompatibleProvider
+from pkb.providers import MockAIProvider, OpenAICompatibleProvider, UnconfiguredProvider
 from pkb.storage import RawStorage
 from pkb.retrieval import DashScopeEmbeddingClient
 from pkb.topics import TopicCandidate, TopicEvidence, TopicReason, TopicSource
@@ -184,6 +184,78 @@ def test_ui_service_can_use_a_browser_session_provider_without_persisting_a_key(
 
     assert isinstance(service.provider, OpenAICompatibleProvider)
     assert service.provider.model == "session-model"
+
+
+def test_invite_default_service_never_falls_back_to_owner_provider(tmp_path, monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.config import Settings
+    from pkb.ui import app as ui_app
+
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path,
+        auth_enabled=True,
+        auth_mode="invite",
+        ai_provider="deepseek",
+        ai_model="owner-model",
+        ai_base_url="https://owner.example.test/v1",
+        ai_api_key="owner-secret",
+        embedding_model="owner-embedding",
+        embedding_base_url="https://owner.example.test/embedding/v1",
+        embedding_api_key="owner-embedding-secret",
+    )
+    identity = IdentityContext(
+        user_id="u_" + "a" * 64,
+        role=Role.MEMBER,
+        display_name="访客甲",
+        issuer="invite",
+        subject="i_0123456789abcdef",
+    )
+    monkeypatch.setattr(ui_app, "get_settings", lambda: settings)
+    monkeypatch.setattr("pkb.ui.services.get_settings", lambda: settings)
+
+    service = ui_app._default_service_for_identity(
+        None,
+        settings,
+        identity,
+        invite_api_mode="byok",
+    )
+
+    assert isinstance(service.provider, UnconfiguredProvider)
+    assert service.embedding_client is None
+    assert service.paths.data_dir == tmp_path
+
+
+def test_invite_api_bindings_are_cleared_when_identity_changes(monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    first = IdentityContext(
+        user_id="u_" + "a" * 64,
+        role=Role.MEMBER,
+        display_name="访客甲",
+        issuer="invite",
+        subject="i_0123456789abcdef",
+    )
+    second = IdentityContext(
+        user_id="u_" + "b" * 64,
+        role=Role.MEMBER,
+        display_name="访客乙",
+        issuer="invite",
+        subject="i_fedcba9876543210",
+    )
+    state = {
+        ui_app._INVITE_API_IDENTITY_STATE_KEY: first.user_id,
+        "provider_session": {"api_key": "first-secret"},
+        "embedding_session": {"embedding_api_key": "first-embedding-secret"},
+    }
+    monkeypatch.setattr(ui_app, "st", SimpleNamespace(session_state=state))
+
+    ui_app._bind_invite_api_session(second)
+
+    assert state["provider_session"] is None
+    assert state["embedding_session"] is None
+    assert state[ui_app._INVITE_API_IDENTITY_STATE_KEY] == second.user_id
 
 
 def test_ui_can_enable_embedding_without_replacing_chat_provider(tmp_path):
@@ -531,6 +603,7 @@ class _FakeStreamlit:
         self.link_button_calls = []
         self.button_calls = []
         self.rerun_called = False
+        self.session_state = {}
         self.sidebar = _FakeSidebar()
 
     def markdown(self, body, **options):
@@ -551,6 +624,75 @@ class _FakeStreamlit:
 
     def divider(self):
         return None
+
+
+class _ConfigFakeStreamlit(_FakeStreamlit):
+    def __init__(self):
+        super().__init__()
+        self.success_calls = []
+        self.info_calls = []
+        self.warning_calls = []
+
+    def expander(self, _label, **_options):
+        return _FakeSidebar()
+
+    def form(self, _key):
+        return _FakeSidebar()
+
+    def selectbox(self, _label, options, **_options):
+        return options[0]
+
+    def text_input(self, label, **options):
+        values = {
+            "模型": "visitor-chat-model",
+            "接口地址": "https://visitor.example.test/v1",
+            "API 密钥": "visitor-chat-secret",
+            "Embedding 模型": "visitor-embedding-model",
+            "Embedding Base URL": "https://visitor.example.test/embedding/v1",
+            "Embedding API Key": "visitor-embedding-secret",
+        }
+        return values.get(label, options.get("value", ""))
+
+    def form_submit_button(self, _label, **_options):
+        return True
+
+    def success(self, body, **_options):
+        self.success_calls.append(body)
+
+    def info(self, body, **_options):
+        self.info_calls.append(body)
+
+    def warning(self, body, **_options):
+        self.warning_calls.append(body)
+
+
+def test_byok_configuration_stays_in_session_and_never_calls_local_settings(monkeypatch):
+    from pkb.ui import app as ui_app
+
+    fake = _ConfigFakeStreamlit()
+    monkeypatch.setattr(ui_app, "st", fake)
+    monkeypatch.setattr(
+        ui_app,
+        "save_local_settings",
+        lambda _values: (_ for _ in ()).throw(
+            AssertionError("byok settings must not be written to .env")
+        ),
+    )
+
+    ui_app._render_provider_configuration(session_only=True)
+    ui_app._render_embedding_configuration(session_only=True)
+
+    assert fake.session_state["provider_session"] == {
+        "provider_name": "deepseek",
+        "model": "visitor-chat-model",
+        "base_url": "https://visitor.example.test/v1",
+        "api_key": "visitor-chat-secret",
+    }
+    assert fake.session_state["embedding_session"] == {
+        "embedding_model": "visitor-embedding-model",
+        "embedding_base_url": "https://visitor.example.test/embedding/v1",
+        "embedding_api_key": "visitor-embedding-secret",
+    }
 
 
 def test_v2_identity_status_uses_safe_fields_and_official_logout_path(monkeypatch):
@@ -652,7 +794,7 @@ def test_invite_identity_status_does_not_expose_invite_id(monkeypatch):
     assert fake.button_calls[0][0] == "退出登录"
 
 
-def test_invite_sidebar_does_not_expose_persistent_provider_settings(
+def test_byok_invite_sidebar_exposes_session_only_provider_settings(
     monkeypatch,
     tmp_path,
 ):
@@ -674,23 +816,64 @@ def test_invite_sidebar_does_not_expose_persistent_provider_settings(
     monkeypatch.setattr(
         ui_app,
         "_render_provider_configuration",
-        lambda: provider_calls.append("provider"),
+        lambda **options: provider_calls.append(("provider", options)),
     )
     monkeypatch.setattr(
         ui_app,
         "_render_embedding_configuration",
-        lambda: provider_calls.append("embedding"),
+        lambda **options: provider_calls.append(("embedding", options)),
     )
 
     ui_app._render_sidebar(
         SimpleNamespace(paths=SimpleNamespace(data_dir=tmp_path)),
         identity=identity,
         auth_mode="invite",
+        invite_api_mode="byok",
+    )
+
+    assert provider_calls == [
+        ("provider", {"session_only": True}),
+        ("embedding", {"session_only": True}),
+    ]
+    captions = "\n".join(body for body, _options in fake.caption_calls)
+    assert "邀请码模式已启用" in captions
+
+
+def test_shared_invite_sidebar_hides_provider_settings(monkeypatch, tmp_path):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_" + "a" * 64,
+        role=Role.MEMBER,
+        display_name="访客甲",
+        issuer="invite",
+        subject="i_0123456789abcdef",
+    )
+    fake = _FakeStreamlit()
+    provider_calls = []
+    monkeypatch.setattr(ui_app, "st", fake)
+    monkeypatch.setattr(
+        ui_app,
+        "_render_provider_configuration",
+        lambda **options: provider_calls.append(("provider", options)),
+    )
+    monkeypatch.setattr(
+        ui_app,
+        "_render_embedding_configuration",
+        lambda **options: provider_calls.append(("embedding", options)),
+    )
+
+    ui_app._render_sidebar(
+        SimpleNamespace(paths=SimpleNamespace(data_dir=tmp_path)),
+        identity=identity,
+        auth_mode="invite",
+        invite_api_mode="shared",
     )
 
     assert provider_calls == []
     captions = "\n".join(body for body, _options in fake.caption_calls)
-    assert "访客不能修改服务器设置" in captions
+    assert "主人配置" in captions
 
 
 def test_identity_display_name_never_echoes_email_fallback():
@@ -734,8 +917,8 @@ def test_v2_sidebar_reports_scoped_storage_without_stale_pending_copy(monkeypatc
     )
     fake = _FakeStreamlit()
     monkeypatch.setattr(ui_app, "st", fake)
-    monkeypatch.setattr(ui_app, "_render_provider_configuration", lambda: None)
-    monkeypatch.setattr(ui_app, "_render_embedding_configuration", lambda: None)
+    monkeypatch.setattr(ui_app, "_render_provider_configuration", lambda **_options: None)
+    monkeypatch.setattr(ui_app, "_render_embedding_configuration", lambda **_options: None)
 
     ui_app._render_sidebar(service, identity=identity)
 

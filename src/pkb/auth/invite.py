@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from pkb.auth.cloudflare import AuthConfigurationError, AuthenticationError
 from pkb.auth.local import hash_password, is_valid_password_hash, verify_password
@@ -24,6 +24,8 @@ _INVITE_ID_PATTERN = re.compile(r"^i_[0-9a-f]{16}$")
 _INVITE_CODE_PATTERN = re.compile(r"^pkb_(i_[0-9a-f]{16})_([A-Za-z0-9_-]{32})$")
 _DISPLAY_NAME_MAX_LENGTH = 128
 _FILE_VERSION = 1
+InviteAPIMode = Literal["shared", "byok"]
+_INVITE_API_MODES = frozenset(("shared", "byok"))
 
 
 def _utc_now() -> datetime:
@@ -50,6 +52,15 @@ def _required_text(value: object, *, code: str, message: str) -> str:
     return value.strip()
 
 
+def _api_mode(value: object) -> InviteAPIMode:
+    if value not in _INVITE_API_MODES:
+        raise AuthConfigurationError(
+            "invalid_invite_api_mode",
+            "邀请码 API 模式必须是 shared 或 byok",
+        )
+    return value  # type: ignore[return-value]
+
+
 @dataclass(frozen=True, slots=True)
 class InvitationRecord:
     """One stored invitation. The reusable plaintext code is never persisted."""
@@ -60,6 +71,7 @@ class InvitationRecord:
     active: bool
     created_at: str
     revoked_at: str | None = None
+    api_mode: InviteAPIMode = "shared"
 
     def __post_init__(self) -> None:
         if not _INVITE_ID_PATTERN.fullmatch(self.invite_id):
@@ -78,6 +90,7 @@ class InvitationRecord:
                 code="invalid_invite_record",
                 message="邀请码撤销时间格式无效",
             )
+        object.__setattr__(self, "api_mode", _api_mode(self.api_mode))
         if not is_valid_password_hash(self.code_hash):
             raise AuthConfigurationError("invalid_invite_hash", "邀请码哈希格式无效")
 
@@ -149,6 +162,9 @@ def parse_invitations(payload: Mapping[str, Any]) -> dict[str, InvitationRecord]
             active=raw.get("active"),
             created_at=raw.get("created_at"),
             revoked_at=raw.get("revoked_at"),
+            # Old invitation files predate the two-mode feature and keep the
+            # original behavior: use the server owner's configured API.
+            api_mode=raw.get("api_mode", "shared"),
         )
         records[invite_id] = record
     return records
@@ -164,6 +180,7 @@ def _payload(records: Mapping[str, InvitationRecord]) -> dict[str, Any]:
                 "active": record.active,
                 "created_at": record.created_at,
                 "revoked_at": record.revoked_at,
+                "api_mode": record.api_mode,
             }
             for invite_id, record in sorted(records.items())
         },
@@ -191,6 +208,7 @@ def create_invitation(
     path: str | Path,
     *,
     display_name: str,
+    api_mode: InviteAPIMode = "shared",
     clock: Callable[[], datetime] = _utc_now,
     iterations: int = 600_000,
 ) -> CreatedInvitation:
@@ -210,6 +228,7 @@ def create_invitation(
         display_name=name,
         active=True,
         created_at=_timestamp(clock()),
+        api_mode=api_mode,
     )
     records[invite_id] = record
     _write_records(config_path, records)
@@ -248,6 +267,7 @@ def revoke_invitation(
         active=False,
         created_at=current.created_at,
         revoked_at=_timestamp(clock()),
+        api_mode=current.api_mode,
     )
     _write_records(config_path, records)
     return True
@@ -301,9 +321,20 @@ class InviteAuthenticator:
             and identity.user_id == derive_invite_user_id(identity.subject)
         )
 
+    def api_mode_for_identity(self, identity: IdentityContext) -> InviteAPIMode:
+        """Return the API policy for a verified invitation identity."""
+
+        if identity.issuer != "invite" or not _INVITE_ID_PATTERN.fullmatch(identity.subject):
+            return "shared"
+        record = self.config.invitations.get(identity.subject)
+        if record is None or not record.active:
+            return "shared"
+        return record.api_mode
+
 
 __all__ = [
     "CreatedInvitation",
+    "InviteAPIMode",
     "InvitationConfig",
     "InvitationRecord",
     "InviteAuthenticator",

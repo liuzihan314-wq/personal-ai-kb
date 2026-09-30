@@ -120,21 +120,28 @@ def invite_create(
         "--name",
         help="邀请码使用者的显示名称，例如张三。",
     ),
+    api_mode: str = typer.Option(
+        "shared",
+        "--api-mode",
+        help="API 模式：shared 使用主人配置，byok 要求访客填写自己的配置。",
+    ),
 ) -> None:
-    """Create one reusable, revocable invitation code."""
+    """Create one reusable, revocable invitation code with an API policy."""
 
     settings = _load_settings()
     try:
         created = create_invitation(
             settings.auth_invites_file,
             display_name=display_name,
+            api_mode=api_mode,
         )
     except AuthConfigurationError as exc:
-        raise typer.BadParameter(str(exc), param_hint="name") from exc
+        raise typer.BadParameter(str(exc), param_hint="api_mode") from exc
 
     typer.echo("status: created")
     typer.echo(f"invite_id: {created.record.invite_id}")
     typer.echo(f"name: {created.record.display_name}")
+    typer.echo(f"api_mode: {created.record.api_mode}")
     typer.echo(f"code: {created.code}")
     typer.echo("notice: 邀请码仅在此处显示，请通过私密渠道交给对应使用者。")
 
@@ -152,7 +159,9 @@ def invite_list() -> None:
     typer.echo(f"count: {len(records)}")
     for record in records:
         status = "active" if record.active else "revoked"
-        typer.echo(f"{record.invite_id}\t{status}\t{record.display_name}")
+        typer.echo(
+            f"{record.invite_id}\t{status}\t{record.api_mode}\t{record.display_name}"
+        )
 
 
 @app.command("invite-revoke")
