@@ -86,3 +86,20 @@ def user_root_for_identity(settings: Settings, identity: IdentityContext) -> Pat
     """Resolve (without creating) the user root for a verified identity."""
 
     return resolve_user_root(settings.data_dir, identity.user_id)
+
+
+def find_duplicate_scoped_user_roots(data_dir: str | Path) -> tuple[Path, ...]:
+    """Find roots produced by the historical double-scoping path bug."""
+
+    users_dir = Path(data_dir) / "users"
+    if not users_dir.is_dir():
+        return ()
+
+    duplicates: list[Path] = []
+    for user_root in sorted(users_dir.iterdir(), key=lambda path: path.name):
+        if not user_root.is_dir() or not USER_ID_PATTERN.fullmatch(user_root.name):
+            continue
+        duplicate = user_root / "users" / user_root.name
+        if duplicate.is_dir():
+            duplicates.append(duplicate)
+    return tuple(duplicates)

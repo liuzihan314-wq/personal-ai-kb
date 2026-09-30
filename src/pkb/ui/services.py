@@ -8,6 +8,7 @@ script generation itself.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -35,6 +36,7 @@ from pkb.retrieval import (
 from pkb.scripts import ScriptResult, ScriptWriter
 from pkb.storage import (
     UserScopeError,
+    find_duplicate_scoped_user_roots,
     prepare_user_root,
     user_root_for_identity,
     validate_user_id,
@@ -43,6 +45,7 @@ from pkb.topics import TopicCandidate, TopicGenerationResult, TopicGenerator
 
 
 _EMBEDDING_UNSET = object()
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -152,8 +155,17 @@ class UIService:
         if paths is not None and identity is not None:
             raise ValueError("paths 和 identity 不能同时提供")
         if identity is not None:
-            user_root = prepare_user_root(user_root_for_identity(get_settings(), identity))
-            self.paths = UIPaths.from_data_dir(user_root, user_id=identity.user_id)
+            settings = get_settings()
+            prepare_user_root(user_root_for_identity(settings, identity))
+            duplicate_roots = find_duplicate_scoped_user_roots(settings.data_dir)
+            if any(path.name == identity.user_id for path in duplicate_roots):
+                logger.warning(
+                    "Detected a duplicate-scoped user data directory for the current identity"
+                )
+            self.paths = UIPaths.from_data_dir(
+                settings.data_dir,
+                user_id=identity.user_id,
+            )
         else:
             self.paths = paths or UIPaths.from_settings()
         self.history_store = HistoryStore(self.paths.history_dir)

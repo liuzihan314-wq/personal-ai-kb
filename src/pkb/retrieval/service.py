@@ -213,20 +213,22 @@ def _related_matches(
         )
         contribution += related_score
 
-    # Related is one supporting field, not an unlimited bonus per link.
-    # Keep all evidence and scale its explanations to the same total budget.
+    # Related is one supporting field, not a popularity bonus for entries with
+    # many links. Keep all evidence, but bound the combined contribution to the
+    # strongest matching link so generic hubs cannot outrank a direct match.
     if contribution:
-        scale = min(1.0, RELATED_WEIGHT / contribution)
+        budget = min(RELATED_WEIGHT, max(reason.score for reason in reasons))
+        scale = min(1.0, budget / contribution)
         bounded_scores = [round(reason.score * scale, 8) for reason in reasons]
-        if sum(bounded_scores) > RELATED_WEIGHT:
+        if sum(bounded_scores) > budget:
             for index in range(len(bounded_scores) - 1, -1, -1):
                 other_total = sum(
                     score for score_index, score in enumerate(bounded_scores)
                     if score_index != index
                 )
-                if other_total <= RELATED_WEIGHT:
+                if other_total <= budget:
                     bounded_scores[index] = round(
-                        max(0.0, RELATED_WEIGHT - other_total),
+                        max(0.0, budget - other_total),
                         8,
                     )
                     break

@@ -535,6 +535,34 @@ class QAService:
         elif not current.path and source.path:
             sources[key] = source
 
+    @staticmethod
+    def _sort_sources_by_relevance(
+        sources: Mapping[tuple[str, str], QASource],
+        retrieval: RetrievalResult,
+        note_ids: list[str],
+    ) -> list[QASource]:
+        """Put retrieved originals first, in candidate relevance order."""
+
+        candidate_rank: dict[str, int] = {}
+        for rank, candidate in enumerate(retrieval.candidates):
+            candidate_rank.setdefault(candidate.document_id, rank)
+            if candidate.raw_document_id:
+                candidate_rank.setdefault(candidate.raw_document_id, rank)
+        linked_rank = {document_id: rank for rank, document_id in enumerate(note_ids)}
+
+        def sort_key(source: QASource) -> tuple[int, int, str]:
+            if source.kind in {"note", "raw"}:
+                if source.source_id in candidate_rank:
+                    return (0, candidate_rank[source.source_id], source.source_id)
+                return (
+                    1,
+                    linked_rank.get(source.source_id, len(linked_rank)),
+                    source.source_id,
+                )
+            return (2, 0, source.source_id)
+
+        return sorted(sources.values(), key=sort_key)
+
     def answer(self, question: str, *, limit: int | None = 10) -> QAResult:
         """Answer one question from local evidence without performing writes."""
 
@@ -653,7 +681,7 @@ class QAService:
                 )
             )
 
-        sources = list(source_map.values())
+        sources = self._sort_sources_by_relevance(source_map, retrieval, note_ids)
         evidence_level = self._evidence_level(
             bool(knowledge_matches),
             any(resolved.note is not None for resolved in resolved_notes),

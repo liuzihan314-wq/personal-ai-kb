@@ -3,6 +3,7 @@
 from pkb.storage.raw import RawPaths, RawStorage, RawStorageError
 from pkb.storage.users import (
     UserScopeError,
+    find_duplicate_scoped_user_roots,
     prepare_user_root,
     resolve_user_root,
     user_root_for_identity,
@@ -14,6 +15,7 @@ __all__ = [
     "RawStorage",
     "RawStorageError",
     "UserScopeError",
+    "find_duplicate_scoped_user_roots",
     "prepare_user_root",
     "resolve_user_root",
     "user_root_for_identity",

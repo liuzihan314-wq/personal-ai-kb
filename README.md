@@ -2,9 +2,9 @@
 
 把看过的 AI 资料，变成下一次可以直接调用的知识和内容素材。
 
-> 当前版本：V1 本地、单用户 Streamlit MVP。
+> 当前版本：V1 本地优先 Streamlit 应用；本机主人免登录，公网访客邀请码隔离已完成本地实现。
 >
-> 后续路线：V2 多用户隔离；正式入口规划 Cloudflare Access ＋ 腾讯云，另有本地账号密码分享模式（已实现）。
+> 当前认证路线：本机主人免登录＋公网每人一个可撤销、可重复使用的邀请码。正式域名、HTTPS、反向代理、备份和生产部署仍未完成；本地账号密码和 Cloudflare Access 仅保留为历史兼容实现，不是当前主线。
 
 ## 它解决什么问题
 
@@ -53,7 +53,9 @@ uv run streamlit run src/pkb/ui/app.py --server.headless true --server.showEmail
 
 然后打开 <http://127.0.0.1:8501/>。第一次使用完整 AI 能力时，还需要在网页侧栏配置 AI Provider；只查看页面和使用部分本地检索能力不需要把 API Key 写进代码。
 
-当前仓库还没有正式 GitHub Release，因此暂时以源码下载和本地运行作为公开使用方式。Release 应在安装流程、真实样本和目标环境回归通过后再创建，避免别人下载到不能运行的版本。
+维护者本机可以直接双击 `output/打开知识库.command`。这个启动器只监听 `127.0.0.1`，并强制使用 V1 主人免登录模式；它直接运行 `src/pkb/ui/app.py`，不会维护第二份网页副本，因此后续源码功能更新会自动反映到 command 打开的页面。该启动器不能用于公网分享。
+
+当前仓库已有 [v0.1.0 Release](https://github.com/liuzihan314-wq/personal-ai-kb/releases/tag/v0.1.0)。其他人仍应先按本 README 完成本地安装和健康检查；完整 AI 能力还需要自行配置 Provider 和 API Key。
 
 ## 适合哪些人
 
@@ -74,11 +76,11 @@ uv run streamlit run src/pkb/ui/app.py --server.headless true --server.showEmail
 | 维度 | V1 当前状态 |
 | --- | --- |
 | 运行方式 | 本地文件系统 ＋ Streamlit；macOS 为主，Windows 作为备用兼容环境 |
-| 用户模型 | 默认单用户；可选本地账号密码隔离模式（实验性） |
+| 用户模型 | 本机主人免登录；公网访客使用邀请码隔离；本地账号密码仅为历史实验实现 |
 | 稳定输入 | 微信公众号文章 URL、正常文本 PDF、观点／好句卡片 |
 | 核心输出 | 本地检索、知识问答、主题综合、3～5 个候选选题、人工确认后的 2～3 分钟口播稿 |
 | 检索 | 标题、标签、关键词、Topic、Related 和 JSON Index；Web UI 可选 Embedding 语义召回 |
-| 云端状态 | 没有当前生产部署；Cloudflare Access、腾讯云属于 V2 规划，本地账号密码隔离模式已实现 |
+| 云端状态 | 没有当前生产部署；邀请码应用层认证已完成本地实现和 E2E 验证，域名、HTTPS、反向代理、备份和服务器部署仍未完成 |
 
 ## V1 闭环：从 Raw 到口播
 
@@ -147,7 +149,7 @@ Raw → Notes → Knowledge → Index / Retrieval → 选题 → 人工选择 �
 - 不处理视频号内容、微信收藏视频或其他视频输入。
 - 不把普通网页 URL／普通链接收藏当作知识输入。观点卡片可以记录一个可选来源 URL，但不会因此抓取该网页。
 - 微信收藏自动增量同步仍是 Experimental／POC，不是 V1 主闭环；当前稳定路径是手动提供公众号文章 URL。
-- 默认 V1 不开启登录、团队协作、移动 App、自动剪辑、自动配音或自动发布；本地账号密码隔离模式属于实验性能力，Cloudflare Access 多用户部署尚未完成。
+- 默认 V1 不开启登录、团队协作、移动 App、自动剪辑、自动配音或自动发布；本机启动器免登录，公网访客路线使用邀请码，必须放在 HTTPS 入口后。本地账号密码和 Cloudflare Access 不属于当前推荐入口。
 
 ## 3 分钟演示路径
 
@@ -227,50 +229,47 @@ cp .env.example .env
 
 需要注意的隐私边界：`Raw` 在本机保存，但配置真实 Provider 后，导入资料会发送到该 Provider 以生成 Notes，问答和口播也会发送当前检索出的上下文。请只处理自己有权使用的资料，并单独评估所选服务商的数据政策；未配置 Provider 时，页面不会把 Mock Provider 的测试文本当作真实回答。
 
-### V2 认证模式（实验性）
+### 当前认证与分享模式
 
-V1 默认 `PKB_AUTH_ENABLED=false`，保持本地单用户模式。需要多用户隔离时可以选择两种认证入口之一：
+V1 默认 `PKB_AUTH_ENABLED=false`，维护者本机通过 `output/打开知识库.command` 免登录进入自己的知识库。当前公网访客路线是 `invite` 邀请码模式；每个邀请码对应一个独立用户目录，不能多人共用。
 
-- `PKB_AUTH_MODE=cloudflare`：使用 Cloudflare Access JWT 请求头；适合正式公网入口，但需要域名、Cloudflare 账号和 Access 配置。
-- `PKB_AUTH_MODE=local`：使用本机账号密码登录；适合不买域名、给朋友临时分享的低敏感场景，不是正式生产入口。
+认证成功后会生成 `IdentityContext`，并绑定到 `data/users/<user_id>/`。不同邀请码对应的访客不会看到对方的 PDF、笔记、索引、检索来源、问答或历史。
 
-两种模式认证成功后都会生成 `IdentityContext`，并绑定到 `data/users/<user_id>/`，不同用户不会看到对方的 PDF、笔记、索引、检索来源、问答或历史。
+#### 邀请码模式（当前访客路线）
 
-#### Cloudflare Access 模式
+邀请码能力已经完成本地实现和合成 E2E 验证，但正式公网部署仍未完成。每位访客应获得一个独立、可撤销、可重复使用的邀请码；邀请码必须通过私密渠道发送，并且公网入口必须使用 HTTPS。
 
-启用 `PKB_AUTH_ENABLED=true` 和 `PKB_AUTH_MODE=cloudflare`，并将应用放在已配置的 Access 入口后，Streamlit 会读取 `st.context.headers` 中的 `Cf-Access-Jwt-Assertion`。
-
-| 变量 | 作用 |
-| --- | --- |
-| `PKB_AUTH_ISSUER` | 预配置的 Access team issuer |
-| `PKB_AUTH_AUDIENCE` | 当前 Access application 的 audience tag |
-| `PKB_AUTH_JWKS_URL` | 可选；留空时由 issuer 推导 Access 官方证书端点 |
-| `PKB_AUTH_ROLE_MAPPING` | 受保护的 `sub=admin;sub=member` 映射；未知或冲突角色会被拒绝 |
-
-适配器只接受固定的 `RS256`，会校验签名、`iss`、`aud`、`exp`、`nbf`（如存在）和 `sub`；内部 `user_id` 根据 issuer 与 sub 的 SHA-256 生成，不直接使用邮箱。缺少令牌、校验失败、身份未配置角色或配置不完整都会停止本次请求，不回退到 V1 共享目录。真实 issuer、audience、身份映射和凭据不应写入仓库；合成 RSA 密钥、JWKS 和 JWT 仅用于测试。
-
-#### 本地账号密码模式
-
-启用 `PKB_AUTH_ENABLED=true` 和 `PKB_AUTH_MODE=local` 后，Streamlit 先显示用户名密码登录页。本地账号来自 `PKB_AUTH_LOCAL_USERS_FILE`，默认路径是 `config/local_users.json`，该文件已被 `.gitignore` 排除。
-
-创建本地账号：
+创建邀请码：
 
 ```bash
-mkdir -p config
-cp config/local_users.example.json config/local_users.json
-uv run pkb auth-add-local-user alice --role admin --display-name "管理员 A"
-uv run pkb auth-add-local-user bob --role member --display-name "成员 B"
+uv run pkb invite-create --name "张三"
 ```
 
-命令会安全提示输入密码，只把 PBKDF2 哈希写入 `config/local_users.json`，不保存明文密码。随后在 `.env` 中设置：
+命令会输出 `invite_id` 和一次明文 `code`。把 `code` 通过私密渠道发给对应访客；系统只在 `config/invites.json` 中保存 PBKDF2 哈希，不保存明文，也不会在 `invite-list` 中再次显示。
+
+查看和撤销邀请码：
+
+```bash
+uv run pkb invite-list
+uv run pkb invite-revoke i_0123456789abcdef
+```
+
+撤销只会停止该邀请码继续登录，并使其现有网页会话在下一次页面运行时失效；不会删除访客数据。邀请码遗失后无法找回原明文，应撤销旧记录并创建一个新邀请码。新邀请码会产生新的独立用户目录，不会自动继承旧邀请码的数据。
+
+公网实例使用以下配置；本机 `output/打开知识库.command` 会显式覆盖为免登录模式，因此不能作为公网启动命令：
 
 ```bash
 PKB_AUTH_ENABLED=true
-PKB_AUTH_MODE=local
-PKB_AUTH_LOCAL_USERS_FILE=config/local_users.json
+PKB_AUTH_MODE=invite
+PKB_AUTH_INVITES_FILE=config/invites.json
 ```
 
-重启 Streamlit 后即可登录。每个用户名映射到独立用户目录，A／B 无法看到对方导入的 PDF、笔记、检索来源、问答和历史；本地模式没有 Cloudflare 边缘防护，只适合可信的小范围分享，不要把高敏感资料放进这个入口。
+邀请码相当于登录凭据，只能通过 HTTPS 传输。当前实现提供应用层认证和数据目录隔离，但尚未完成域名、HTTPS、反向代理、服务器磁盘备份和正式生产部署。
+
+#### 历史兼容实现
+
+- `PKB_AUTH_MODE=local` 的本地账号密码模式曾用于验证双用户隔离，代码仍保留以兼容历史实现，但不再作为当前部署入口、公开使用路径或后续验收目标。
+- `PKB_AUTH_MODE=cloudflare` 的 Cloudflare Access 适配器也仍保留，但正式 Access、腾讯云和生产域名部署没有继续完成，不应在项目已经部署前对外宣称可用。
 
 ## 数据目录与安全边界
 
@@ -288,12 +287,12 @@ data/
 
 - `Raw`、`Notes`、`Knowledge` 和 `Index` 分层保存，AI 不能用 Notes 或 Knowledge 覆盖 Raw。
 - `.gitignore` 排除 `.env`、`data/`、`runtime/` 和 `output/`；不要执行 `git add .` 来绕过逐项复核。
-- 默认 V1 没有加密和公开服务的安全边界；本地账号密码模式只适合可信的小范围分享，不要把本地 Streamlit 直接暴露到公网。
+- 默认 V1 没有加密和公开服务的安全边界；本机主人启动器只绑定 `127.0.0.1`。邀请码实例必须单独部署在 HTTPS 入口后，不要把免登录 Streamlit 直接暴露到公网。
 - 页面保存的 `.env` 会限制为当前系统用户可读写，Provider 密钥以密码输入、不显示、不写日志；这不替代操作系统权限和服务商侧的密钥管理。
 
-## V2 规划：Cloudflare Access ＋ 腾讯云 ＋ 多用户
+## 后续部署规划：Cloudflare Access ＋ 腾讯云（非当前入口）
 
-这一节是路线设计，不是当前能力声明。仓库目前没有 Cloudflare Access 登录入口、腾讯云运行实例、生产域名或多用户数据目录。
+这一节是保留的历史部署方案，不是当前公网能力声明。当前访客路线以邀请码应用层认证为准；Cloudflare Access、腾讯云、生产域名和正式多用户部署没有继续完成，也不是当前 Release 的使用前提。
 
 目标部署链路是：
 
@@ -309,7 +308,7 @@ data/
 - Access 负责入口和登录；应用计划读取受信的身份信息，校验唯一用户标识与角色，缺少或非法身份时拒绝请求。
 - 每个用户的 `raw`、`notes`、`knowledge`、`index`、问答／选题／口播历史写入独立用户根目录，不回退到共享用户目录。
 - A 与 B 需要在资料列表、检索、问答来源、下载和历史记录上互相隔离；管理员能力是否包含全局查看，先由 V2 设计任务明确，不能凭部署默认获得。
-- V1 本地模式继续保留，迁移前先归档并验证本地稳定版本；V2 失败时可以回到本地模式，不把生产数据迁移作为第一步。
+- 本机主人免登录和邀请码隔离是当前保留路线；如果未来重新启动 Cloudflare Access 部署，必须另立任务，重新确认身份提供商、域名、数据迁移和回滚边界。
 
 Cloudflare 的具体身份提供商、域名、腾讯云实例规格、持久化方案和生产凭据目前尚未确定。它们需要在文档对齐和双身份测试通过后，由维护者单独确认，不在本 README 中伪装成已经部署。
 

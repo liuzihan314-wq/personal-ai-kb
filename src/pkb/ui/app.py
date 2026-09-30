@@ -14,6 +14,7 @@ from pkb.auth import (
     AuthenticationError,
     CloudflareAccessAuthenticator,
     IdentityContext,
+    InviteAuthenticator,
     LocalAuthenticator,
 )
 from pkb.config import get_settings, save_local_settings
@@ -408,15 +409,44 @@ def _render_local_login(settings: Any) -> None:
     st.rerun()
 
 
-def _render_local_identity_status(identity: IdentityContext) -> None:
-    """Show a local account identity and a session-scoped logout action."""
+def _render_invite_login(settings: Any) -> None:
+    """Render the public invitation-code login gate."""
+
+    with st.form("invite_login"):
+        code = st.text_input("邀请码", type="password")
+        submitted = st.form_submit_button("进入知识库")
+    if not submitted:
+        return
+    if not code:
+        st.error("请输入邀请码。")
+        return
+
+    try:
+        authenticator = InviteAuthenticator.from_settings(settings)
+        identity = authenticator.authenticate_code(code)
+    except AuthError as error:
+        st.error(f"登录失败：{error}")
+        return
+
+    st.session_state[_LOCAL_IDENTITY_STATE_KEY] = identity
+    st.rerun()
+
+
+def _render_session_identity_status(
+    identity: IdentityContext,
+    *,
+    auth_mode: str,
+) -> None:
+    """Show a session identity and its local logout action."""
+
+    method = "邀请码" if auth_mode == "invite" else "本地账号"
 
     st.markdown(
         f"""
         <div class="pkb-side-status">
             <strong><span class="pkb-status-dot"></span>当前登录身份</strong>
             <p>{_html(_identity_display_name(identity))} · 角色：{_html(identity.role.display_name)}</p>
-            <p>已通过本地账号登录</p>
+            <p>已通过{method}登录</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -455,8 +485,8 @@ def _render_identity_status(
 ) -> None:
     """Show safe identity fields without exposing claims or server paths."""
 
-    if auth_mode == "local":
-        _render_local_identity_status(identity)
+    if auth_mode in {"local", "invite"}:
+        _render_session_identity_status(identity, auth_mode=auth_mode)
         return
 
     st.markdown(
@@ -511,10 +541,15 @@ def _render_sidebar(
             _render_identity_status(identity, auth_mode=auth_mode)
             if auth_mode == "local":
                 st.caption("本地账号模式已启用；数据按当前登录身份隔离。")
+            elif auth_mode == "invite":
+                st.caption("邀请码模式已启用；每个邀请码的数据完全隔离。")
             else:
                 st.caption("V2 认证已启用；数据按当前登录身份隔离。")
-        _render_provider_configuration()
-        _render_embedding_configuration()
+        if auth_mode == "invite":
+            st.caption("AI 服务由知识库主人统一配置，访客不能修改服务器设置。")
+        else:
+            _render_provider_configuration()
+            _render_embedding_configuration()
 
 
 def _service_for_session_values(
@@ -1160,10 +1195,25 @@ def main(service: UIService | None = None) -> None:
     _init_state()
     _render_theme()
     settings = get_settings()
-    if settings.auth_enabled and settings.auth_mode == "local":
+    if settings.auth_enabled and settings.auth_mode in {"local", "invite"}:
         identity = _local_identity_from_session()
+        if identity is not None and settings.auth_mode == "invite":
+            try:
+                invitation_active = InviteAuthenticator.from_settings(
+                    settings
+                ).is_identity_active(identity)
+            except AuthError as error:
+                st.error(f"邀请码状态检查失败：{error}")
+                st.stop()
+            if not invitation_active:
+                st.session_state.pop(_LOCAL_IDENTITY_STATE_KEY, None)
+                identity = None
+                st.warning("邀请码已失效，请使用新的邀请码重新进入。")
         if identity is None:
-            _render_local_login(settings)
+            if settings.auth_mode == "invite":
+                _render_invite_login(settings)
+            else:
+                _render_local_login(settings)
             st.stop()
     else:
         try:

@@ -87,11 +87,11 @@ def test_video_question_uses_knowledge_and_traces_back_to_notes(tmp_path):
     assert result.evidence_level == "knowledge+notes"
     assert result.knowledge_topics == ["AI 视频"]
     assert [source.kind for source in result.sources] == [
+        "note",
+        "note",
         "knowledge",
-        "note",
-        "note",
     ]
-    assert result.sources[0].path == str(knowledge_record.path)
+    assert result.sources[-1].path == str(knowledge_record.path)
     assert {source.source_id for source in result.note_sources} == {"video-1", "video-2"}
     assert all(source.available for source in result.note_sources)
     assert {item.source_kind for item in result.evidence} == {"knowledge", "note"}
@@ -100,6 +100,66 @@ def test_video_question_uses_knowledge_and_traces_back_to_notes(tmp_path):
         path: path.read_bytes()
         for path in [*notes_dir.glob("*.md"), index_path, knowledge_record.path]
     }
+
+
+def test_sources_put_the_strongest_retrieved_original_before_linked_pdf(tmp_path):
+    notes_dir = tmp_path / "data" / "notes"
+    knowledge_dir = tmp_path / "data" / "knowledge"
+    notes = [
+        Note(
+            document_id="pdf-general-ai",
+            source_type="pdf",
+            title="AI 通用风险报告",
+            created_at=FIXED_TIME,
+            tags=["AI"],
+            summary="这是一份介绍 AI 通用风险的 PDF 材料。",
+            source_reference="raw:pdf-general-ai",
+        ),
+        Note(
+            document_id="wechat-ai-risk",
+            source_type="wechat",
+            title="微信接入 AI 合法吗？有什么风险？",
+            created_at=FIXED_TIME,
+            tags=["微信接入", "合法风险"],
+            summary="公众号原文讨论微信接入 AI 的合法性和具体风险。",
+            source_reference="https://mp.weixin.qq.com/s/example",
+        ),
+    ]
+    note_storage = NoteStorage(notes_dir)
+    for note in notes:
+        note_storage.write(note)
+    index = IndexBuilder(notes_dir, clock=lambda: FIXED_TIME).build()
+    KnowledgeStorage(knowledge_dir).write(
+        TopicKnowledge(
+            topic="AI 风险",
+            created_at=FIXED_TIME,
+            updated_at=FIXED_TIME,
+            source_note_ids=[note.document_id for note in notes],
+            source_references=[note.source_reference for note in notes],
+            synthesis="AI 风险需要结合具体使用场景判断。",
+            sources=[
+                KnowledgeSource(
+                    note_id=note.document_id,
+                    title=note.title,
+                    raw_document_id=note.document_id,
+                    reference=note.source_reference,
+                )
+                for note in notes
+            ],
+        )
+    )
+
+    result = QAService(
+        index=index,
+        knowledge_dir=knowledge_dir,
+        notes_dir=notes_dir,
+        provider=MockAIProvider(responses={"answer_question": "回答。"}),
+    ).answer("微信接入 AI 合法吗？有什么风险？")
+
+    assert result.retrieval.candidates[0].document_id == "wechat-ai-risk"
+    assert result.sources[0].source_id == "wechat-ai-risk"
+    assert result.sources[0].reference == "https://mp.weixin.qq.com/s/example"
+    assert result.sources[-1].kind == "knowledge"
 
 
 def _index_entry(document_id: str, title: str, note_path: Path) -> IndexEntry:

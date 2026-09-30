@@ -6,7 +6,14 @@ from pathlib import Path
 
 import typer
 
-from pkb.auth import AuthConfigurationError, hash_password, update_local_users_file
+from pkb.auth import (
+    AuthConfigurationError,
+    create_invitation,
+    hash_password,
+    list_invitations,
+    revoke_invitation,
+    update_local_users_file,
+)
 from pkb.config import Settings, get_settings
 from pkb.ingest.idea import IdeaCardError, IdeaCardImporter
 from pkb.ingest.pdf import PDFImportError, PDFImporter
@@ -17,7 +24,7 @@ from pkb.notes import NoteGenerationError, NoteService, NoteStorageError
 from pkb.qa import QAError, QAService
 from pkb.retrieval import RetrievalService
 from pkb.scripts import ScriptGenerationError, ScriptWriter
-from pkb.storage import RawStorage
+from pkb.storage import RawStorage, find_duplicate_scoped_user_roots
 from pkb.topics import TopicGenerationError, TopicGenerator
 
 
@@ -106,16 +113,77 @@ def auth_add_local_user(
     typer.echo(f"file: {target}")
 
 
+@app.command("invite-create")
+def invite_create(
+    display_name: str = typer.Option(
+        ...,
+        "--name",
+        help="邀请码使用者的显示名称，例如张三。",
+    ),
+) -> None:
+    """Create one reusable, revocable invitation code."""
+
+    settings = _load_settings()
+    try:
+        created = create_invitation(
+            settings.auth_invites_file,
+            display_name=display_name,
+        )
+    except AuthConfigurationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="name") from exc
+
+    typer.echo("status: created")
+    typer.echo(f"invite_id: {created.record.invite_id}")
+    typer.echo(f"name: {created.record.display_name}")
+    typer.echo(f"code: {created.code}")
+    typer.echo("notice: 邀请码仅在此处显示，请通过私密渠道交给对应使用者。")
+
+
+@app.command("invite-list")
+def invite_list() -> None:
+    """List invitation ids and states without exposing codes or hashes."""
+
+    settings = _load_settings()
+    try:
+        records = list_invitations(settings.auth_invites_file)
+    except AuthConfigurationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="invites") from exc
+
+    typer.echo(f"count: {len(records)}")
+    for record in records:
+        status = "active" if record.active else "revoked"
+        typer.echo(f"{record.invite_id}\t{status}\t{record.display_name}")
+
+
+@app.command("invite-revoke")
+def invite_revoke(
+    invite_id: str = typer.Argument(..., help="invite-list 返回的邀请码记录 ID。"),
+) -> None:
+    """Revoke one invitation without deleting its isolated data."""
+
+    settings = _load_settings()
+    try:
+        changed = revoke_invitation(settings.auth_invites_file, invite_id)
+    except AuthConfigurationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="invite_id") from exc
+
+    typer.echo(f"status: {'revoked' if changed else 'already_revoked'}")
+    typer.echo(f"invite_id: {invite_id}")
+
+
 @app.command()
 def health() -> None:
     """Load configuration and report a minimal healthy application state."""
 
     settings = _load_settings()
     logger.debug("Running health check")
-    typer.echo("status: ok")
+    duplicate_roots = find_duplicate_scoped_user_roots(settings.data_dir)
+    typer.echo(f"status: {'warning' if duplicate_roots else 'ok'}")
     typer.echo(f"app: {settings.app_name}")
     typer.echo(f"environment: {settings.environment}")
     typer.echo(f"data_dir: {settings.data_dir}")
+    if duplicate_roots:
+        typer.echo(f"storage_warning: duplicate_user_roots={len(duplicate_roots)}")
 
 
 @app.command("import-pdf")

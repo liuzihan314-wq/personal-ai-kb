@@ -27,12 +27,13 @@
 - data/raw/、data/notes/、data/knowledge/、data/index/：遵循现有架构的本地知识存储，全部排除出 Git。Raw 不可覆盖。
 - runtime/：运行日志、缓存、临时文件与浏览器资料；图纸中 data/cache/、data/logs/ 为兼容预留，同样排除出 Git。
 - output/：最终报告、导出物和交付物，默认排除出 Git。
+- `output/打开知识库.command` 是维护者本机的唯一图形启动入口：必须直接运行当前 `src/pkb/ui/app.py`、只绑定 `127.0.0.1` 并强制主人免登录；不得复制第二套网页源码，也不得用于公网分享。公网实例使用独立的 `invite`／`cloudflare` 配置与启动方式。
 - 文件名使用英文，文本使用 UTF-8；报告使用 TASK-ID-description.md。按需建目录，不提前创建空实现模块。
 - 清理临时文件、删除文件和目录前必须获得用户明确确认。
 
 ## Safety and Git
 
-- 不读取或记录密钥；不上传真实 PDF、微信资料、Raw、Notes、Knowledge、Index 或用户导出物。
+- 不读取或记录密钥；不上传真实 PDF、微信资料、Raw、Notes、Knowledge、Index、`config/invites.json` 或用户导出物。邀请码按登录凭据处理，明文只在创建时显示一次。
 - .env.example 仅存空值或非敏感示例；创建或修改真实 .env、密钥、CI/CD、系统配置、数据库迁移须先确认。
 - 已验收 TASK 的正常短期 feature branch 创建、commit、fast-forward merge、ROADMAP 更新与依赖任务派发由 MAIN 自主完成，并在进度报告中说明。reset、rebase、force push、删除分支、改写历史、公开发布，以及其他不可逆 Git 操作仍须用户明确确认。
 - 长期分支只有 main；不得建立长期 mac / windows 分支。

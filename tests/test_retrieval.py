@@ -223,7 +223,38 @@ def test_dense_related_links_do_not_overrule_direct_video_matches():
     assert config.score < min(c.score for c in result.candidates)
     assert config.score < 1
     assert len(config.evidence.related) == 5
-    assert abs(sum(r.score for r in config.reasons if r.field == "related") - 0.1) < 0.001
+    related_scores = [r.score for r in config.reasons if r.field == "related"]
+    assert related_scores
+    assert sum(related_scores) < RELATED_WEIGHT
+
+
+def test_many_generic_related_links_do_not_hide_a_stronger_direct_match():
+    relevant = _entry(
+        "wechat-risk",
+        "微信接入聊天机器人违法吗",
+        tags=["违法风险"],
+        keywords=["微信", "风险"],
+    )
+    generic_targets = [
+        _entry(f"ai-{index}", f"AI 资料 {index}", keywords=["ai"])
+        for index in range(12)
+    ]
+    generic_hub = _entry(
+        "ai-hub",
+        "AI 工具汇总",
+        tags=["AI"],
+        keywords=["ai"],
+        related=[_link(entry.document_id) for entry in generic_targets],
+    )
+
+    result = retrieve_from_index(
+        _index(relevant, generic_hub, *generic_targets),
+        "微信连接AI是合法的吗？有什么风险？",
+        limit=10,
+        embedding_client=None,
+    )
+
+    assert result.candidates[0].document_id == "wechat-risk"
 
 
 def test_hybrid_weight_boundaries_are_explicit_and_bounded():

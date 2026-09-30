@@ -9,7 +9,12 @@ import pytest
 from pkb.config import Settings
 from pkb.models import IdentityContext, Role
 from pkb.providers import MockAIProvider
-from pkb.storage import UserScopeError, prepare_user_root, user_root_for_identity
+from pkb.storage import (
+    UserScopeError,
+    find_duplicate_scoped_user_roots,
+    prepare_user_root,
+    user_root_for_identity,
+)
 from pkb.ui import UIPaths, UIService
 
 
@@ -79,7 +84,15 @@ def test_uiservice_prepares_user_root(user_tmp_path: Path, monkeypatch) -> None:
     service = UIService(identity=identity)
 
     user_root = user_tmp_path / "users" / identity.user_id
-    assert service.paths.data_dir == user_root
+    assert service.paths.data_dir == user_tmp_path
+    assert service.paths.raw_dir == user_root / "raw"
+    assert service.paths.notes_dir == user_root / "notes"
+    assert service.paths.knowledge_dir == user_root / "knowledge"
+    assert service.paths.index_path == user_root / "index" / "index.json"
+    assert service.paths.history_dir == user_root / "history"
+    relative_parts = service.paths.raw_dir.relative_to(user_tmp_path).parts
+    assert relative_parts.count("users") == 1
+    assert relative_parts.count(identity.user_id) == 1
     for name in ("raw", "notes", "knowledge", "index", "history"):
         assert (user_root / name).is_dir()
 
@@ -148,3 +161,27 @@ def test_prepare_user_root_creates_subdirectories(user_tmp_path: Path) -> None:
     assert (root / "knowledge").is_dir()
     assert (root / "index").is_dir()
     assert (root / "history").is_dir()
+
+
+def test_duplicate_scoped_user_root_is_detected(user_tmp_path: Path) -> None:
+    user_id = _user_id("https://test.example.com", "alice")
+    duplicate = user_tmp_path / "users" / user_id / "users" / user_id
+    duplicate.mkdir(parents=True)
+
+    assert find_duplicate_scoped_user_roots(user_tmp_path) == (duplicate,)
+
+
+def test_uiservice_warns_when_current_identity_has_duplicate_root(
+    user_tmp_path: Path,
+    monkeypatch,
+    caplog,
+) -> None:
+    settings = Settings(data_dir=str(user_tmp_path), log_level="INFO")
+    monkeypatch.setattr("pkb.ui.services.get_settings", lambda: settings)
+    identity = _identity("alice")
+    duplicate = user_tmp_path / "users" / identity.user_id / "users" / identity.user_id
+    duplicate.mkdir(parents=True)
+
+    UIService(identity=identity)
+
+    assert "duplicate-scoped user data directory" in caplog.text

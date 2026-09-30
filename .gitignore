@@ -6,6 +6,7 @@ build/
 dist/
 .pytest_cache/
 tests/_tmp/
+.tmp/
 
 # Local Python environment
 .venv/
@@ -16,6 +17,7 @@ tests/_tmp/
 .env.*
 !.env.example
 config/local_users.json
+config/invites.json
 
 # Local knowledge, runtime state, and generated deliverables
 data/

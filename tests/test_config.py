@@ -31,6 +31,7 @@ def test_default_settings_are_local_and_non_secret(monkeypatch):
     assert settings.auth_role_mapping is None
     assert settings.auth_mode == "cloudflare"
     assert settings.auth_local_users_file == Path("config/local_users.json")
+    assert settings.auth_invites_file == Path("config/invites.json")
 
 
 def test_settings_load_utf8_dotenv_and_mask_provider_secret(tmp_path):

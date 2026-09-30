@@ -42,8 +42,9 @@ class Settings(BaseSettings):
     auth_audience: str | None = None
     auth_jwks_url: str | None = None
     auth_role_mapping: str | None = None
-    auth_mode: Literal["cloudflare", "local"] = "cloudflare"
+    auth_mode: Literal["cloudflare", "local", "invite"] = "cloudflare"
     auth_local_users_file: Path = Path("config/local_users.json")
+    auth_invites_file: Path = Path("config/invites.json")
 
     @property
     def raw_dir(self) -> Path:

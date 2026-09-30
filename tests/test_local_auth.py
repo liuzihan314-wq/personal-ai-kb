@@ -206,6 +206,9 @@ def test_local_auth_binds_to_isolated_ui_service(tmp_path: Path, monkeypatch):
 
     alice = UIService(identity=alice_identity, provider=MockAIProvider())
     bob = UIService(identity=bob_identity, provider=MockAIProvider())
+    assert alice.paths.data_dir == tmp_path
+    assert alice.paths.raw_dir == tmp_path / "users" / alice_identity.user_id / "raw"
+    assert bob.paths.raw_dir == tmp_path / "users" / bob_identity.user_id / "raw"
     alice.add_idea("Alice 的私有灵感", tags=["private"])
     bob.add_idea("Bob 的私有灵感", tags=["private"])
 

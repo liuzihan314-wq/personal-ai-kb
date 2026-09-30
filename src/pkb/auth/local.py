@@ -94,6 +94,16 @@ def verify_password(password: str, encoded: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
+def is_valid_password_hash(encoded: str) -> bool:
+    """Return whether a value is a structurally valid supported password hash."""
+
+    try:
+        _split_password_hash(encoded)
+    except ValueError:
+        return False
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class LocalUserRecord:
     """One configured local account, containing only a password hash."""

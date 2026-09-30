@@ -923,6 +923,8 @@ Status: DONE
 Dependencies: TASK-030 PASS、TASK-031 PASS
 Suggested branch: `feat/v2-local-auth`
 
+Product status: 历史实验实现，已被 TASK-036 的“本机主人免登录＋公网邀请码”路线替代；不再作为当前部署入口、公开使用路径或后续验收目标。该任务记录保留，用于说明代码和本地分支的来源。
+
 目标：在不购买域名、不使用 Cloudflare Access 的前提下，用本机账号密码完成双用户数据隔离，为低风险朋友间分享提供实验入口。
 
 Acceptance:
@@ -934,6 +936,39 @@ Acceptance:
 - CLI 能安全生成哈希并添加本地用户；全量测试通过。
 
 Acceptance record: 2026-09-17 18:26 MAIN 验收 PASS，feature branch `feat/v2-local-auth`，slice commit `c02dfbc`，集成切片 commit `2ef92ca`。检查证据：`pytest` 145 passed（基线 132，新增 13）且仅存已知 PyMuPDF／SWIG 5 条上游警告；`uv lock --check` 通过。实现要点：新增 `src/pkb/auth/local.py`，使用 `pbkdf2_sha256`、随机 salt 与 `hmac.compare_digest`；本地用户名派生 `u_ + sha256("local\0username")`，直接复用既有 `UserScopedStorage`，未新增数据目录或迁移；UI 本地模式登录后只在会话状态保存 `IdentityContext`，退出时清除会话；CLI 新增 `auth-hash-password` 与 `auth-add-local-user`，本地用户文件原子写入并设 600 权限；文档同步说明该模式不替代 Cloudflare Access 生产入口。后置修复 commit `aba1ba4`：允许先复制空模板 `config/local_users.example.json`，再由 CLI 添加用户；全量测试仍为 145 passed。
+
+Follow-up record: 2026-09-18 11:13 MAIN 在 README 本地账号密码模式中公开 `monesy`（`admin`）与 `niko`（`member`）两个账号的用户名和角色说明，并明确密码及 PBKDF2 哈希只保存在本机 `config/local_users.json`，不进入 GitHub；同步将创建账号示例从 `alice`／`bob` 改为上述两个账号。`git diff --check`、README 敏感信息扫描和全量回归测试通过。
+
+Follow-up repair record: 2026-09-25 16:07 MAIN 修复认证后用户根目录被重复拼接为 `data/users/<user_id>/users/<user_id>/`的错误，`UIService` 现在始终以全局 `data_dir` 构造 `UIPaths`，并新增“路径中只能有一层 `users/<user_id>`”的精确回归断言、启动警告与 `pkb health` 异常目录检测。将错误 Niko 目录中的 3 条 Raw／Note 非破坏性复制回 V1，改正内部来源路径并重建 Index，V1 条目由 19 条增至 22 条；原 Niko 错误目录保留，未删除或覆盖。验证：全量 `pytest` 148 passed，`uv lock --check`、sdist／wheel 打包、独立虚拟环境安装通过；安装后 `pkb health` 正确报告 1 个已保留的异常嵌套目录。3 条迁移资料均可检索；临时免登录 V1 实例的真实 UI 检索中，`ai视频` 返回 10 条候选，前 3 条均为 AI 视频资料且得分 `0.750`；本地 Streamlit 进程的 branch、worktree、HEAD、端口与验收代码一致。
+
+Follow-up retrieval repair record: 2026-09-26 11:24 MAIN 使用主人原问题“微信连接 AI 是合法的吗？有什么风险？”复现：目标文章已存在于 V1 Raw／Note／Index，但因多篇旧资料命中泛词 `AI`，且每篇资料的多条 Related 关联分可累加，目标文章仅排第 15 名，被问答的前 10 条候选截断。检索服务现保留全部 Related 证据，但其排序贡献限制为最强一条关联，避免关联数量／流行度压过标题、标签和关键词的直接命中；新增“多个泛化 Related 不得隐藏更强直接匹配”的精确回归测试。验证：真实数据直接检索中目标文章由第 15 名升至第 1 名，真实 `QAService` 候选包含该来源，Streamlit 页面以原问题检索时首条为《微信接入【聊天机器人】违法吗？（附司法赔偿案例）》；全量 `pytest` 149 passed，`uv lock --check`、sdist／wheel 打包和独立虚拟环境安装／`pkb health` 通过。
+
+Follow-up source-order repair record: 2026-09-26 11:35 MAIN 修复问答来源链二次重排问题：过去来源列表先插入 Knowledge 及其持久化 Note 顺序，再追加检索候选，导致弱相关 PDF 可能显示在高相关微信公众号原文之前；现在可追溯原文按本次检索候选的相关度顺序展示，未直接命中的 Knowledge 关联 Note 随后展示，主题综合页最后展示，不改变检索分数和回答上下文。新增回归测试，以“Knowledge 先记录 PDF、实际检索首名为微信公众号文章”的样本验证微信公众号原文仍排来源第 1。真实 V1 数据以主人原问题验证，首个来源为《微信接入【聊天机器人】违法吗？（附司法赔偿案例）》及对应公众号 URL，后续才是 PDF。全量 `pytest` 150 passed，`uv lock --check`、sdist／wheel 打包、独立目标目录安装和导入验证通过。
+
+Redesign decision: 2026-09-27 16:34 主人确认采用“本机主人免密码＋公网每人一个可撤销、可重复使用的邀请码＋每个邀请码独立数据目录”，实现状态转入 TASK-036。
+
+## TASK-036 — Passwordless Local Owner and Invite Access
+
+Status: DONE
+Dependencies: TASK-035
+Product status: CURRENT；当前产品认证路线为本机主人免登录＋公网访客邀请码。
+
+目标：统一本机主人入口与后续公网访客入口；维护者双击 `output/打开知识库.command` 直接进入 V1，访客通过独立邀请码进入隔离数据目录。
+
+Acceptance:
+
+- 本机 command 只绑定 `127.0.0.1`，显式覆盖 `.env` 的认证设置并免登录进入 V1。
+- command 直接启动当前 `src/pkb/ui/app.py`，源码更新无需复制到第二份网页目录。
+- 每个邀请码包含稳定记录 ID 与随机秘密，服务端只保存 PBKDF2 哈希；可创建、列出和撤销。
+- 不同邀请码映射到不同的 `data/users/<user_id>/`，内容、索引、来源与历史互不可见。
+- 撤销后不能再次登录，已有会话在下一次页面运行时失效；访客数据不自动删除。
+- 邀请码公网入口与主人本机免登录入口分离；公网部署必须使用 HTTPS。
+
+Implementation record: 2026-09-27 16:34 MAIN 完成源码、CLI、UI、启动器、配置模板、忽略规则与文档实现。真实本机验收：从 Finder／Terminal 等价方式打开 `output/打开知识库.command` 后，PID `20714` 从主项目目录监听 `127.0.0.1:8501`，Chrome 页面直接显示 V1 工作区，不再出现用户名密码。合成邀请码 E2E：创建邀请码→网页出现邀请码门禁→登录后显示“验收访客／成员”并进入独立工作区→CLI 撤销→刷新后回到邀请码门禁；访客页面不显示可持久化修改服务器 `.env` 的 Provider／Embedding 设置；未创建或修改真实 `config/invites.json`。验证：全量 `pytest` 157 passed，仅有 5 条已知 PyMuPDF／SWIG 上游警告；`zsh -n`、`uv lock --check`、sdist／wheel 打包、独立目标目录安装及安装后 import 通过。正式公网域名、HTTPS、服务器部署和备份仍属于 TASK-032 范围。
+
+Integration record: 2026-09-30 16:31 MAIN 在邀请码实现、文档对齐、项目规则迁移和旧规则文件删除后重新执行全量测试，结果 `157 passed`、5 条已知 PyMuPDF／SWIG 上游警告；`uv lock --check`、`git diff --check` 通过。TASK-036 验收结论为 PASS，状态更新为 DONE；正式公网域名、HTTPS、反向代理、服务器备份和生产部署仍未实现。
+
+Follow-up documentation record: 2026-09-30 16:19 MAIN 将 GitHub 公开说明统一到当前产品路线：本机主人免登录＋公网邀请码；将本地账号密码标记为历史实验实现，将 Cloudflare Access／腾讯云标记为未继续的后续部署方案；修正 README 中过期的 Release、用户模型、云端状态和认证说明，并说明本地 `feat/v2-local-auth` 分支仅为历史开发分支，不代表当前主线。未删除任何分支或历史任务记录。
 
 ---
 
@@ -980,9 +1015,11 @@ Follow-up record: 2026-09-18 10:42 MAIN 基于已推送的 `main` 提交 `3ce86e
 - TASK-029、TASK-031 PASS → TASK-032
 - TASK-030、TASK-032 PASS → TASK-033
 
-V2 正式部署调度仍暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。
+V2 Cloudflare Access／腾讯云正式部署调度仍暂停：TASK-032 涉及真实域名、DNS、身份提供商配置、腾讯云 CVM 权限变更、远端密钥写入和生产部署，须由 MAIN 另行取得主人确认后再派发；TASK-033 仍依赖 TASK-032 PASS，继续 BLOCKED。该路线不是当前邀请码入口的必要依赖。
 
-本地无域名分享线已完成 TASK-035，可作为朋友间低敏感试用入口；它不替代 TASK-032／TASK-033 的正式 Access 部署与双身份 E2E 验收。
+当前访客分享路线以 TASK-036 为准：本机主人免登录，公网访客使用独立、可撤销、可重复使用的邀请码。邀请码功能已完成本地实现和合成 E2E 验证，但正式域名、HTTPS、反向代理、服务器备份和生产部署仍未完成。
+
+TASK-035 的本地账号密码模式已完成历史验证，但不再作为当前分享入口；本地 `feat/v2-local-auth` 分支仅保留为历史开发分支，不代表 GitHub 当前主线。
 
 继续阻塞：
 

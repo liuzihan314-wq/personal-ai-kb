@@ -628,6 +628,71 @@ def test_local_identity_status_uses_local_logout_button(monkeypatch):
     assert fake.button_calls[0][0] == "退出登录"
 
 
+def test_invite_identity_status_does_not_expose_invite_id(monkeypatch):
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_" + "a" * 64,
+        role=Role.MEMBER,
+        display_name="访客甲",
+        issuer="invite",
+        subject="i_0123456789abcdef",
+    )
+    fake = _FakeStreamlit()
+    monkeypatch.setattr(ui_app, "st", fake)
+
+    ui_app._render_identity_status(identity, auth_mode="invite")
+
+    markdown = "\n".join(body for body, _options in fake.markdown_calls)
+    assert "访客甲" in markdown
+    assert "已通过邀请码登录" in markdown
+    assert identity.user_id not in markdown
+    assert identity.subject not in markdown
+    assert fake.button_calls[0][0] == "退出登录"
+
+
+def test_invite_sidebar_does_not_expose_persistent_provider_settings(
+    monkeypatch,
+    tmp_path,
+):
+    from types import SimpleNamespace
+
+    from pkb.auth import IdentityContext, Role
+    from pkb.ui import app as ui_app
+
+    identity = IdentityContext(
+        user_id="u_" + "a" * 64,
+        role=Role.MEMBER,
+        display_name="访客甲",
+        issuer="invite",
+        subject="i_0123456789abcdef",
+    )
+    fake = _FakeStreamlit()
+    provider_calls = []
+    monkeypatch.setattr(ui_app, "st", fake)
+    monkeypatch.setattr(
+        ui_app,
+        "_render_provider_configuration",
+        lambda: provider_calls.append("provider"),
+    )
+    monkeypatch.setattr(
+        ui_app,
+        "_render_embedding_configuration",
+        lambda: provider_calls.append("embedding"),
+    )
+
+    ui_app._render_sidebar(
+        SimpleNamespace(paths=SimpleNamespace(data_dir=tmp_path)),
+        identity=identity,
+        auth_mode="invite",
+    )
+
+    assert provider_calls == []
+    captions = "\n".join(body for body, _options in fake.caption_calls)
+    assert "访客不能修改服务器设置" in captions
+
+
 def test_identity_display_name_never_echoes_email_fallback():
     from pkb.auth import IdentityContext, Role
     from pkb.ui import app as ui_app
