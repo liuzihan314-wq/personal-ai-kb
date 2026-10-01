@@ -66,6 +66,22 @@ def test_configured_provider_uses_openai_compatible_chat_completions_contract():
     assert captured["headers"]["Authorization"] == "Bearer test-key"
     assert captured["body"]["model"] == "deepseek-test"
     assert captured["body"]["stream"] is False
+    messages = captured["body"]["messages"]
+    assert "只能引用实际提供的编号" in messages[0]["content"]
+    assert "[来源 1: 本地 Note | note-1]" in messages[1]["content"]
+
+
+def test_answer_context_uses_source_chain_citation_id():
+    assert openai_compatible._context(
+        [
+            ProviderDocument(
+                document_id="note-1",
+                title="本地 Note",
+                content="本地内容",
+                citation_id="来源 3",
+            )
+        ]
+    ) == "[来源 3: 本地 Note | note-1]\n本地内容"
 
 
 def test_script_prompt_requests_publishable_spoken_copy_without_source_labels():

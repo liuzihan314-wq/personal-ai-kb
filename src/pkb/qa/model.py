@@ -33,6 +33,7 @@ class QASource(BaseModel):
 
     kind: SourceKind
     source_id: str = Field(min_length=1)
+    citation_id: str | None = None
     title: str = ""
     path: str | None = None
     reference: str | None = None

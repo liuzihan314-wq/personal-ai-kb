@@ -993,6 +993,59 @@ Acceptance record: 2026-09-30 17:31 MAIN 验收通过。`shared` 邀请码使用
 
 ---
 
+## TASK-038 — Q&A Citation Labels
+
+Status: DONE
+Dependencies: TASK-037
+Product status: CURRENT；回答中的来源编号必须能在同一条来源链中找到。
+
+目标：统一知识库问答回答与下方来源链的引用编号，避免出现来源链中不存在的“来源 27”。
+
+Acceptance:
+
+- 模型上下文只提供对应回答来源链中的编号，来源卡片展示相同编号和资料类型。
+- 提示词要求模型只引用实际提供的来源编号。
+- 模型输出来源链未包含的编号时，界面明确标记为“未核验引用”，不伪装成可追溯来源。
+- 不影响无编号资料上下文、问答来源排序和其他生成流程。
+
+Acceptance record: 2026-10-01 23:47 MAIN 验收通过。知识库问答的上下文资料块和来源卡片共用按本次回答生成的 `来源 N` 编号；来源卡片同时保留 `NOTE`／`KNOWLEDGE` 等类型。Provider 提示词要求只引用实际传入编号；服务层将来源链中不存在的引用标记为“未核验引用”。`tests/test_ui.py`、`tests/test_qa.py`、`tests/test_providers.py` 定向回归共 46 passed，含 5 条已知 PyMuPDF／SWIG 上游弃用警告。未执行全量测试；未提交代码。TASK-038 PASS，已并入当前 main 工作区。
+
+---
+
+## TASK-039 — Retrieval Relevance for Site Deployment
+
+Status: IN_PROGRESS
+Dependencies: TASK-038
+Owner: MAIN + TASK-039 Worker
+
+目标：改进“AI部署网页”这类混合中英文检索，使具体建站／部署资料排在只命中泛词“AI”或“网页”的资料之前。主人提供的公众号文章《用Codex的站点模式做数据分析网站，再通过WorkBuddy发布和分享给朋友》是本地人工验收样本，不进入 Git 或自动化测试。
+
+允许范围：`src/pkb/retrieval/` 及其聚焦测试。禁止修改 UI、问答来源渲染、Notes／Knowledge／Raw／Index 数据、依赖和本文件；不得调用外部 API。Task Brief：`docs/tasks/TASK-039-search-ranking.md`。
+
+Acceptance：合成回归证明命中特定建站／部署词的资料高于仅命中常见泛词的资料；现有检索测试通过；MAIN 用主人本地 Index 只读验证目标公众号资料进入前 10；检索理由可解释，无数据写入。
+
+当前 Worker：clientThreadId `client-new-thread:7c8b4909-a2bf-4571-bd2c-a8eb6aa12f1d`（正式 threadId 尚未返回）；branch `feat/task-039-search-ranking`；worktree `/Users/mac/.codex/worktrees/2388/personal-ai-kb-spec`；状态 IN_PROGRESS。
+
+---
+
+## TASK-040 — Clickable Q&A Sources and PDF Preview
+
+Status: IN_PROGRESS
+Dependencies: TASK-038
+Owner: MAIN + TASK-040 Worker
+
+目标：保留回答中的括号来源样式；点击公众号引用在新标签打开原文，点击 PDF 引用在知识库内预览不可变的原始 PDF。
+
+允许范围：Q&A 来源展示和 UI 测试。禁止修改检索评分、用户目录解析、认证／邀请码策略、Raw 内容、依赖和本文件；PDF 只能通过当前用户的 `raw_dir` 和校验后的文档 ID 定位。Task Brief：`docs/tasks/TASK-040-clickable-source-preview.md`。
+
+Acceptance：公众号引用链接到对应 HTTP(S) 原文；PDF 引用打开当前用户原始 PDF 的知识库内预览，而非只触发下载；无效 ID、错误 URL scheme、路径穿越 ID 和缺失 PDF 不会访问其他文件；UI 回归通过，无新增依赖及持久化用户资料。
+
+当前 Worker：clientThreadId `client-new-thread:46bafb0a-ce08-4c0d-b4fc-6e548042d4a0`（正式 threadId 尚未返回）；branch `codex/task-040-clickable-source-preview`；worktree `/Users/mac/.codex/worktrees/task-040-clickable-sources/personal-ai-kb-spec`；状态 IN_PROGRESS。
+
+---
+
+---
+
 # M9 — GitHub Presentation
 
 ## TASK-034 — GitHub Project Introduction and Demo Assets

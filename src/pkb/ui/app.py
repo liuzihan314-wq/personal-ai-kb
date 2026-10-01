@@ -853,9 +853,11 @@ def _render_sources(sources: Sequence[Any], *, raw_dir: Path) -> None:
         location = source.path or source.reference or source.source_id
         availability = "可读取" if source.available else "不可读取"
         title = source.title or source.source_id
+        citation = getattr(source, "citation_id", None)
+        source_label = f"{citation} · {source.kind}" if citation else source.kind
         with st.container(border=True):
             st.markdown(
-                f"<div class=\"pkb-source-row\"><span class=\"pkb-source-kind\">{_html(source.kind)}</span>"
+                f"<div class=\"pkb-source-row\"><span class=\"pkb-source-kind\">{_html(source_label)}</span>"
                 f"<strong>{_html(title)}</strong><span>{_html(availability)} · {_html(location)}</span></div>",
                 unsafe_allow_html=True,
             )

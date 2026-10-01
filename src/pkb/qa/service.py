@@ -1,5 +1,6 @@
 """Local, explainable Q&A over persisted Knowledge, Notes, and Raw data."""
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,27 @@ from pkb.qa.model import (
 
 class QAError(ValueError):
     """Base error for invalid local Q&A inputs or persisted evidence."""
+
+
+_SOURCE_CITATION = re.compile(r"来源\s*#?\s*(\d+)")
+
+
+def _validate_citations(answer: str, valid_citation_ids: set[str]) -> str:
+    """Mark source references that do not map to the displayed source chain."""
+
+    valid_numbers = {
+        match.group(1)
+        for citation_id in valid_citation_ids
+        if (match := _SOURCE_CITATION.search(citation_id)) is not None
+    }
+
+    def replace(match: re.Match[str]) -> str:
+        number = match.group(1)
+        if number in valid_numbers:
+            return f"来源 {number}"
+        return f"未核验引用（来源 {number}）"
+
+    return _SOURCE_CITATION.sub(replace, answer)
 
 
 class QAInputError(QAError):
@@ -646,12 +668,14 @@ class QAService:
         source_map: dict[tuple[str, str], QASource] = {}
         evidence: list[QAEvidence] = []
         context: list[ProviderDocument] = []
+        context_source_keys: list[tuple[str, str]] = []
 
         for match in knowledge_matches:
             source = self._knowledge_source(match.record)
             self._merge_source(source_map, source)
             evidence.append(self._knowledge_evidence(match, source))
             context.append(_knowledge_provider_document(match.record))
+            context_source_keys.append((source.kind, source.source_id))
 
         for resolved in resolved_notes:
             role = (
@@ -667,6 +691,7 @@ class QAService:
             if resolved.note is not None:
                 evidence.append(self._note_evidence(resolved, source))
                 context.append(_note_provider_document(resolved.note))
+                context_source_keys.append((source.kind, source.source_id))
 
         for material in raw_materials:
             source = self._raw_source(material)
@@ -680,8 +705,31 @@ class QAService:
                     source=str(material.extracted_path),
                 )
             )
+            context_source_keys.append((source.kind, source.source_id))
 
         sources = self._sort_sources_by_relevance(source_map, retrieval, note_ids)
+        context_source_key_set = set(context_source_keys)
+        ordered_context_keys = [
+            (source.kind, source.source_id)
+            for source in sources
+            if (source.kind, source.source_id) in context_source_key_set
+        ]
+        citation_ids = {
+            source_key: f"来源 {index}"
+            for index, source_key in enumerate(ordered_context_keys, start=1)
+        }
+        sources = [
+            source.model_copy(
+                update={"citation_id": citation_ids.get((source.kind, source.source_id))}
+            )
+            for source in sources
+        ]
+        context = [
+            document.model_copy(
+                update={"citation_id": citation_ids[source_key]}
+            )
+            for document, source_key in zip(context, context_source_keys, strict=True)
+        ]
         evidence_level = self._evidence_level(
             bool(knowledge_matches),
             any(resolved.note is not None for resolved in resolved_notes),
@@ -732,7 +780,7 @@ class QAService:
         return QAResult(
             question=question,
             status="answered",
-            answer=answer.strip(),
+            answer=_validate_citations(answer.strip(), set(citation_ids.values())),
             evidence_level=evidence_level,
             reason="Answer generated from the listed local evidence; no network retrieval was used.",
             retrieval=retrieval,
