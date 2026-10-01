@@ -878,7 +878,11 @@ def _citation_source_map(sources: Sequence[Any]) -> dict[str, Any]:
     grouped: dict[str, list[Any]] = {}
     for source in sources:
         citation_id = getattr(source, "citation_id", None)
-        match = _CITATION_ID.fullmatch(citation_id) if isinstance(citation_id, str) else None
+        match = (
+            _CITATION_ID.fullmatch(citation_id)
+            if isinstance(citation_id, str)
+            else None
+        )
         if match:
             number = match.group(1)
             grouped.setdefault(number, []).append(source)

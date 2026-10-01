@@ -69,6 +69,7 @@ def test_source_helpers_expose_web_originals_and_local_raw_files(tmp_path):
 
 
 def test_answer_citations_link_to_the_unique_web_or_pdf_source(tmp_path, monkeypatch):
+    from pkb.qa.model import QASource
     from pkb.ui import app as ui_app
 
     calls = []
@@ -78,14 +79,14 @@ def test_answer_citations_link_to_the_unique_web_or_pdf_source(tmp_path, monkeyp
     pdf_path.parent.mkdir()
     pdf_path.write_bytes(_make_pdf("synthetic source"))
     sources = [
-        SimpleNamespace(
+        QASource(
             kind="note",
             source_id="wechat-1",
             citation_id="来源 1",
             reference="https://mp.weixin.qq.com/s/example?a=1&b=2",
             path="notes/wechat-1.md",
         ),
-        SimpleNamespace(
+        QASource(
             kind="note",
             source_id="pdf-1",
             citation_id="来源 2",
@@ -119,14 +120,38 @@ def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, mo
         citation_id="来源 1",
         reference="https://example.test/other",
     )
+    unsupported = SimpleNamespace(
+        kind="note",
+        source_id="unsupported-id",
+        citation_id="来源 3",
+        reference="javascript:alert(1)",
+    )
+    missing_pdf = SimpleNamespace(
+        kind="raw",
+        source_id="missing-pdf",
+        citation_id="来源 4",
+        reference="raw:missing-pdf",
+    )
     messages = []
     monkeypatch.setattr(ui_app.st, "info", messages.append)
 
-    ui_app._render_cited_answer("无效（来源 2），冲突（来源 1）", [source, duplicate], raw_dir=tmp_path)
+    ui_app._render_cited_answer(
+        "无效（来源 2），冲突（来源 1），不支持（来源 3），缺失（来源 4）",
+        [source, duplicate, unsupported, missing_pdf],
+        raw_dir=tmp_path,
+    )
     ui_app._render_answer_pdf_preview([source, duplicate], raw_dir=tmp_path)
+    monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "missing-pdf"})
+    ui_app._render_answer_pdf_preview([missing_pdf], raw_dir=tmp_path)
 
-    assert calls == ["无效（来源 2），冲突（来源 1）"]
-    assert messages == ["该来源的原始 PDF 当前不可用。"]
+    assert calls == [
+        "无效（来源 2），冲突（来源 1），不支持（来源 3），"
+        "缺失[（来源 4）](?source_preview=missing-pdf)"
+    ]
+    assert messages == [
+        "该来源的原始 PDF 当前不可用。",
+        "该来源的原始 PDF 当前不可用。",
+    ]
     traversal = SimpleNamespace(kind="raw", source_id="../outside")
     assert ui_app._source_raw_path(traversal, tmp_path) is None
     outside_pdf = tmp_path.parent / "outside-original.pdf"
