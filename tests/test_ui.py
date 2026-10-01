@@ -68,6 +68,124 @@ def test_source_helpers_expose_web_originals_and_local_raw_files(tmp_path):
     assert _source_raw_path(pdf_source, tmp_path) == original
 
 
+def test_answer_citations_link_to_the_unique_web_or_pdf_source(tmp_path, monkeypatch):
+    from pkb.qa.model import QASource
+    from pkb.ui import app as ui_app
+
+    calls = []
+    monkeypatch.setattr(ui_app.st, "markdown", lambda body, **options: calls.append(body))
+    monkeypatch.setattr(ui_app.st, "query_params", {"tab": "search"})
+    pdf_path = tmp_path / "pdf-1" / "original.pdf"
+    pdf_path.parent.mkdir()
+    pdf_path.write_bytes(_make_pdf("synthetic source"))
+    sources = [
+        QASource(
+            kind="note",
+            source_id="wechat-1",
+            citation_id="来源 1",
+            reference="https://mp.weixin.qq.com/s/example?a=1&b=2",
+            path="notes/wechat-1.md",
+        ),
+        QASource(
+            kind="note",
+            source_id="pdf-1",
+            citation_id="来源 2",
+            reference="raw:pdf-1",
+            path="notes/pdf-1.md",
+        ),
+    ]
+
+    ui_app._render_cited_answer("网页（来源 1），PDF（来源 2）", sources, raw_dir=tmp_path)
+
+    assert len(calls) == 1
+    assert "[（来源 1）](<https://mp.weixin.qq.com/s/example?a=1&b=2>)" in calls[0]
+    assert "[（来源 2）](?tab=search&source_preview=pdf-1)" in calls[0]
+
+
+def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, monkeypatch):
+    from pkb.ui import app as ui_app
+
+    calls = []
+    monkeypatch.setattr(ui_app.st, "markdown", lambda body, **options: calls.append(body))
+    monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "../outside"})
+    source = SimpleNamespace(
+        kind="note",
+        source_id="safe-id",
+        citation_id="来源 1",
+        reference="javascript:alert(1)",
+    )
+    duplicate = SimpleNamespace(
+        kind="note",
+        source_id="other-id",
+        citation_id="来源 1",
+        reference="https://example.test/other",
+    )
+    unsupported = SimpleNamespace(
+        kind="note",
+        source_id="unsupported-id",
+        citation_id="来源 3",
+        reference="javascript:alert(1)",
+    )
+    missing_pdf = SimpleNamespace(
+        kind="raw",
+        source_id="missing-pdf",
+        citation_id="来源 4",
+        reference="raw:missing-pdf",
+    )
+    messages = []
+    monkeypatch.setattr(ui_app.st, "info", messages.append)
+
+    ui_app._render_cited_answer(
+        "无效（来源 2），冲突（来源 1），不支持（来源 3），缺失（来源 4）",
+        [source, duplicate, unsupported, missing_pdf],
+        raw_dir=tmp_path,
+    )
+    ui_app._render_answer_pdf_preview([source, duplicate], raw_dir=tmp_path)
+    monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "missing-pdf"})
+    ui_app._render_answer_pdf_preview([missing_pdf], raw_dir=tmp_path)
+
+    assert calls == [
+        "无效（来源 2），冲突（来源 1），不支持（来源 3），"
+        "缺失[（来源 4）](?source_preview=missing-pdf)"
+    ]
+    assert messages == [
+        "该来源的原始 PDF 当前不可用。",
+        "该来源的原始 PDF 当前不可用。",
+    ]
+    traversal = SimpleNamespace(kind="raw", source_id="../outside")
+    assert ui_app._source_raw_path(traversal, tmp_path) is None
+    outside_pdf = tmp_path.parent / "outside-original.pdf"
+    outside_pdf.write_bytes(_make_pdf("outside synthetic PDF"))
+    (tmp_path / "linked-id").symlink_to(outside_pdf.parent, target_is_directory=True)
+    linked_source = SimpleNamespace(kind="raw", source_id="linked-id")
+    assert ui_app._source_raw_path(linked_source, tmp_path) is None
+
+
+def test_answer_pdf_preview_renders_a_synthetic_original_page(tmp_path, monkeypatch):
+    from pkb.ui import app as ui_app
+
+    original = tmp_path / "pdf-1" / "original.pdf"
+    original.parent.mkdir()
+    original.write_bytes(_make_pdf("synthetic original PDF"))
+    source = SimpleNamespace(
+        kind="note",
+        source_id="pdf-1",
+        citation_id="来源 1",
+        title="Synthetic PDF",
+        reference="raw:pdf-1",
+    )
+    images = []
+    monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "pdf-1"})
+    monkeypatch.setattr(ui_app.st, "selectbox", lambda _label, values, **_options: values[0])
+    monkeypatch.setattr(ui_app.st, "image", lambda image, **_options: images.append(image))
+    monkeypatch.setattr(ui_app.st, "subheader", lambda _text: None)
+
+    ui_app._render_answer_pdf_preview([source], raw_dir=tmp_path)
+
+    assert len(images) == 1
+    assert images[0].startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def _seed_script_library(data_dir: Path) -> TopicCandidate:
     paths = UIPaths.from_data_dir(data_dir)
     note_storage = NoteStorage(paths.notes_dir)

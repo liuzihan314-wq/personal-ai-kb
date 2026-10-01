@@ -1,11 +1,13 @@
 """Single-page Streamlit MVP for the personal AI knowledge base."""
 
+import re
 from collections.abc import Sequence
 from html import escape
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlencode, urlparse
 
+import pymupdf
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -822,9 +824,19 @@ def _source_web_url(source: Any) -> str | None:
     for value in (getattr(source, "reference", None), getattr(source, "path", None)):
         if not isinstance(value, str):
             continue
-        parsed = urlparse(value.strip())
-        if parsed.scheme in {"http", "https"} and parsed.netloc:
-            return value.strip()
+        candidate = value.strip()
+        try:
+            parsed = urlparse(candidate)
+            parsed.port
+        except ValueError:
+            continue
+        if (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+        ):
+            return candidate
     return None
 
 
@@ -834,14 +846,132 @@ def _source_raw_path(source: Any, raw_dir: Path) -> Path | None:
     if getattr(source, "kind", None) not in {"note", "raw"}:
         return None
     source_id = getattr(source, "source_id", "")
-    if not isinstance(source_id, str) or not source_id or Path(source_id).name != source_id:
+    if (
+        not isinstance(source_id, str)
+        or not source_id
+        or source_id in {".", ".."}
+        or Path(source_id).name != source_id
+        or "\\" in source_id
+    ):
         return None
-    directory = raw_dir / source_id
+    raw_root = raw_dir.resolve()
+    directory = raw_root / source_id
     for filename in ("original.pdf", "original.txt"):
         candidate = directory / filename
-        if candidate.is_file():
-            return candidate
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(raw_root)
+        except (OSError, ValueError):
+            continue
+        if resolved.is_file():
+            return resolved
     return None
+
+
+_ANSWER_CITATION = re.compile(r"[（(]来源\s*#?\s*(\d+)[）)]")
+_CITATION_ID = re.compile(r"来源\s*#?\s*(\d+)")
+
+
+def _citation_source_map(sources: Sequence[Any]) -> dict[str, Any]:
+    """Return only citation IDs that identify exactly one source."""
+
+    grouped: dict[str, list[Any]] = {}
+    for source in sources:
+        citation_id = getattr(source, "citation_id", None)
+        match = (
+            _CITATION_ID.fullmatch(citation_id)
+            if isinstance(citation_id, str)
+            else None
+        )
+        if match:
+            number = match.group(1)
+            grouped.setdefault(number, []).append(source)
+    return {number: items[0] for number, items in grouped.items() if len(items) == 1}
+
+
+def _render_cited_answer(answer: str, sources: Sequence[Any], *, raw_dir: Path) -> None:
+    """Render valid answer citations as links while leaving other text intact."""
+
+    source_map = _citation_source_map(sources)
+
+    def replace(match: re.Match[str]) -> str:
+        source = source_map.get(match.group(1))
+        if source is None:
+            return match.group(0)
+        label = match.group(0)
+        web_url = _source_web_url(source)
+        if web_url:
+            encoded_url = quote(web_url, safe=":/?#[]@!$&'()*+,;=%")
+            return f"[{label}](<{encoded_url}>)"
+
+        raw_path = _source_raw_path(source, raw_dir)
+        source_id = getattr(source, "source_id", None)
+        is_raw_reference = (
+            isinstance(source_id, str)
+            and getattr(source, "reference", None) == f"raw:{source_id}"
+        )
+        if (raw_path is not None and raw_path.suffix.lower() == ".pdf") or (
+            raw_path is None and is_raw_reference
+        ):
+            params = dict(st.query_params)
+            params["source_preview"] = source_id
+            return f"[{label}](?{urlencode(params)})"
+        return label
+
+    st.markdown(_ANSWER_CITATION.sub(replace, answer))
+
+
+def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
+    """Render one page at a time from a safely resolved local PDF original."""
+
+    raw_path = _source_raw_path(source, raw_dir)
+    if raw_path is None or raw_path.suffix.lower() != ".pdf":
+        st.info("该来源的原始 PDF 当前不可用。")
+        return
+    try:
+        document = pymupdf.open(stream=raw_path.read_bytes(), filetype="pdf")
+    except (OSError, pymupdf.FileDataError, pymupdf.EmptyFileError):
+        st.info("该来源的原始 PDF 当前不可用。")
+        return
+    try:
+        if not len(document):
+            st.info("该来源的原始 PDF 当前不可用。")
+            return
+        st.subheader(f"原始 PDF 预览：{getattr(source, 'title', '') or source.source_id}")
+        page_index = st.selectbox(
+            "页码",
+            range(len(document)),
+            format_func=lambda index: str(index + 1),
+            key=f"source-preview-page-{source.source_id}",
+        )
+        pixmap = document.load_page(page_index).get_pixmap(
+            matrix=pymupdf.Matrix(1.5, 1.5),
+            alpha=False,
+        )
+        st.image(
+            pixmap.tobytes("png"),
+            caption=f"第 {page_index + 1} 页",
+            use_container_width=True,
+        )
+    finally:
+        document.close()
+
+
+def _render_answer_pdf_preview(sources: Sequence[Any], *, raw_dir: Path) -> None:
+    """Show only a PDF belonging to a unique citation in this answer."""
+
+    source_id = st.query_params.get("source_preview")
+    if not source_id:
+        return
+    matches = [
+        source
+        for source in _citation_source_map(sources).values()
+        if getattr(source, "source_id", None) == source_id
+    ]
+    if len(matches) != 1:
+        st.info("该来源的原始 PDF 当前不可用。")
+        return
+    _render_pdf_preview(matches[0], raw_dir=raw_dir)
 
 
 def _render_sources(sources: Sequence[Any], *, raw_dir: Path) -> None:
@@ -1042,9 +1172,14 @@ def _render_search_qa_tab(service: UIService) -> None:
                 unsafe_allow_html=True,
             )
             if result.answer:
-                st.markdown(result.answer)
+                _render_cited_answer(
+                    result.answer,
+                    result.sources,
+                    raw_dir=service.paths.raw_dir,
+                )
             else:
                 st.info(result.reason)
+            _render_answer_pdf_preview(result.sources, raw_dir=service.paths.raw_dir)
             _render_sources(result.sources, raw_dir=service.paths.raw_dir)
             for evidence in result.evidence:
                 st.caption(f"{evidence.source_kind}：{evidence.explanation}")
