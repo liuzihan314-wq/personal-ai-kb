@@ -1008,13 +1008,13 @@ Acceptance:
 - 模型输出来源链未包含的编号时，界面明确标记为“未核验引用”，不伪装成可追溯来源。
 - 不影响无编号资料上下文、问答来源排序和其他生成流程。
 
-Acceptance record: 2026-10-01 23:47 MAIN 验收通过。知识库问答的上下文资料块和来源卡片共用按本次回答生成的 `来源 N` 编号；来源卡片同时保留 `NOTE`／`KNOWLEDGE` 等类型。Provider 提示词要求只引用实际传入编号；服务层将来源链中不存在的引用标记为“未核验引用”。`tests/test_ui.py`、`tests/test_qa.py`、`tests/test_providers.py` 定向回归共 46 passed，含 5 条已知 PyMuPDF／SWIG 上游弃用警告。未执行全量测试；未提交代码。TASK-038 PASS，已并入当前 main 工作区。
+Acceptance record: 2026-10-01 23:47 MAIN 验收通过。知识库问答的上下文资料块和来源卡片共用按本次回答生成的 `来源 N` 编号；来源卡片同时保留 `NOTE`／`KNOWLEDGE` 等类型。Provider 提示词要求只引用实际传入编号；服务层将来源链中不存在的引用标记为“未核验引用”。`tests/test_ui.py`、`tests/test_qa.py`、`tests/test_providers.py` 定向回归共 46 passed，含 5 条已知 PyMuPDF／SWIG 上游弃用警告。未执行全量测试。后续随 TASK-039／040 集成提交 `77eb2fd` 纳入 `main`。
 
 ---
 
 ## TASK-039 — Retrieval Relevance for Site Deployment
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-038
 Owner: MAIN + TASK-039 Worker
 
@@ -1024,13 +1024,13 @@ Owner: MAIN + TASK-039 Worker
 
 Acceptance：合成回归证明命中特定建站／部署词的资料高于仅命中常见泛词的资料；现有检索测试通过；MAIN 用主人本地 Index 只读验证目标公众号资料进入前 10；检索理由可解释，无数据写入。
 
-当前 Worker：clientThreadId `client-new-thread:7c8b4909-a2bf-4571-bd2c-a8eb6aa12f1d`（正式 threadId 尚未返回）；branch `feat/task-039-search-ranking`；worktree `/Users/mac/.codex/worktrees/2388/personal-ai-kb-spec`；状态 IN_PROGRESS。
+Acceptance record: 2026-10-02 00:18 MAIN 验收通过。按索引内语料频率降低泛词权重，并对“网页／网站／站点”“部署／发布／上线”加入定向同义扩展；合成排序回归和检索理由可解释性测试通过。使用本地主人 Index 对“AI部署网页”只读查询，指定公众号文章《用Codex的站点模式做数据分析网站，再通过WorkBuddy发布和分享给朋友》从原先第 10 名以外升至第 2 名，排在另一篇高度相关的站点部署文章之后。完整测试套件 168 passed；`git diff --check` 通过；没有修改本地 Index 或资料。实现提交 `0b733e1`，已合入 `main`（整合提交 `f8c6449`）；branch `feat/task-039-search-ranking`，worktree `/Users/mac/.codex/worktrees/2388/personal-ai-kb-spec`。未执行浏览器 E2E；结果由本地 Index CLI 和完整自动化测试验收。
 
 ---
 
 ## TASK-040 — Clickable Q&A Sources and PDF Preview
 
-Status: IN_PROGRESS
+Status: DONE
 Dependencies: TASK-038
 Owner: MAIN + TASK-040 Worker
 
@@ -1040,7 +1040,7 @@ Owner: MAIN + TASK-040 Worker
 
 Acceptance：公众号引用链接到对应 HTTP(S) 原文；PDF 引用打开当前用户原始 PDF 的知识库内预览，而非只触发下载；无效 ID、错误 URL scheme、路径穿越 ID 和缺失 PDF 不会访问其他文件；UI 回归通过，无新增依赖及持久化用户资料。
 
-当前 Worker：clientThreadId `client-new-thread:46bafb0a-ce08-4c0d-b4fc-6e548042d4a0`（正式 threadId 尚未返回）；branch `codex/task-040-clickable-source-preview`；worktree `/Users/mac/.codex/worktrees/task-040-clickable-sources/personal-ai-kb-spec`；状态 IN_PROGRESS。
+Acceptance record: 2026-10-02 00:18 MAIN 验收通过。回答中的 `（来源 N）` 与来源链编号匹配后成为链接：HTTP(S) 原文链接可点击打开；PDF 引用会在知识库页面按页预览当前用户 Raw 目录中的 `original.pdf`。增加全角／半角括号、真实 `QASource`、缺失 PDF、重复编号、错误 URL scheme、路径穿越和合成 PDF 页面测试；完整测试套件 168 passed，含 5 条已知 PyMuPDF／SWIG 弃用警告；`git diff --check` 通过。无新依赖、无用户资料写入。实现提交 `d859b9b`，失败路径回归提交 `b2e84d2`；已合入 `main`（整合提交 `e296cf0`）。branch `codex/task-040-clickable-source-preview`，worktree `/Users/mac/.codex/worktrees/task-040-clickable-sources/personal-ai-kb-spec`。未执行浏览器 E2E；自动化 UI 测试验证链接目标、来源解析及 PDF 页图输出。
 
 ---
 
