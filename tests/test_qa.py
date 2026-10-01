@@ -69,7 +69,7 @@ def test_video_question_uses_knowledge_and_traces_back_to_notes(tmp_path):
 
     provider = MockAIProvider(
         responses={
-            "answer_question": "库内资料显示，AI 视频主要有文生视频、图生视频、数字人和自动剪辑。",
+            "answer_question": "库内资料显示，AI 视频主要有文生视频、图生视频、数字人和自动剪辑，见来源1；来源27提到其他内容。",
         }
     )
     result = QAService(
@@ -82,7 +82,8 @@ def test_video_question_uses_knowledge_and_traces_back_to_notes(tmp_path):
 
     assert result.status == "answered"
     assert result.answer == (
-        "库内资料显示，AI 视频主要有文生视频、图生视频、数字人和自动剪辑。"
+        "库内资料显示，AI 视频主要有文生视频、图生视频、数字人和自动剪辑，见来源 1；"
+        "未核验引用（来源 27）提到其他内容。"
     )
     assert result.evidence_level == "knowledge+notes"
     assert result.knowledge_topics == ["AI 视频"]
@@ -92,6 +93,11 @@ def test_video_question_uses_knowledge_and_traces_back_to_notes(tmp_path):
         "knowledge",
     ]
     assert result.sources[-1].path == str(knowledge_record.path)
+    assert [source.citation_id for source in result.sources] == [
+        "来源 1",
+        "来源 2",
+        "来源 3",
+    ]
     assert {source.source_id for source in result.note_sources} == {"video-1", "video-2"}
     assert all(source.available for source in result.note_sources)
     assert {item.source_kind for item in result.evidence} == {"knowledge", "note"}

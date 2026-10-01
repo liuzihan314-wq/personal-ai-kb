@@ -13,6 +13,7 @@ class ProviderDocument(BaseModel):
     document_id: str | None = None
     title: str | None = None
     source: str | None = None
+    citation_id: str | None = None
 
 
 DocumentInput: TypeAlias = str | ProviderDocument

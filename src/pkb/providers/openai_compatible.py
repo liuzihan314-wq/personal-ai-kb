@@ -33,7 +33,8 @@ def _context(documents: Sequence[ProviderDocument]) -> str:
     for index, item in enumerate(documents, start=1):
         identity = item.document_id or f"source-{index}"
         title = item.title or identity
-        blocks.append(f"[来源 {index}: {title} | {identity}]\n{item.content}")
+        citation_id = item.citation_id or f"来源 {index}"
+        blocks.append(f"[{citation_id}: {title} | {identity}]\n{item.content}")
     return "\n\n".join(blocks)
 
 
@@ -196,7 +197,7 @@ class OpenAICompatibleProvider:
 
     def answer_question(self, question: str, context: Sequence[ProviderDocument] = ()) -> str:
         return self._complete(
-            "你是中文知识库问答助手。只能使用提供的本地来源回答；不要臆造外部事实。直接回答问题，分点说明；资料不足时明确说不足。",
+            "你是中文知识库问答助手。只能使用提供的本地来源回答；不要臆造外部事实。直接回答问题，分点说明；资料不足时明确说不足。引用证据时必须使用资料块中方括号内的来源编号，格式为 [来源 1]；只能引用实际提供的编号，不得编造编号或引用未提供的来源。",
             f"问题：{question}\n\n本地来源：\n{_context(context)}",
         )
 
