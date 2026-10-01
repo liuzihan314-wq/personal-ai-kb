@@ -283,6 +283,39 @@ def test_ai_video_keyword_match_stays_a_direct_search_signal():
     assert any(reason.field == "keywords" for reason in result.candidates[0].reasons)
 
 
+def test_site_deployment_query_prefers_specific_metadata_over_generic_matches():
+    specific = _entry(
+        "site-release",
+        "Codex 站点模式与数据分析网站发布",
+        tags=["AI"],
+        keywords=["WorkBuddy", "站点", "发布"],
+    )
+    generic_ai = [
+        _entry(f"generic-ai-{index}", f"AI 工具与模型 {index}", tags=["AI"])
+        for index in range(12)
+    ]
+    generic_web = [
+        _entry(f"generic-web-{index}", f"网页基础知识 {index}", keywords=["网页"])
+        for index in range(5)
+    ]
+    index = _index(*generic_ai, *generic_web, specific)
+
+    first_result = retrieve_from_index(index, "AI部署网页", embedding_client=None)
+    repeated_result = retrieve_from_index(index, "AI部署网页", embedding_client=None)
+
+    assert first_result == repeated_result
+    assert first_result.candidates[0].document_id == "site-release"
+    candidate = first_result.candidates[0]
+    title_reason = next(reason for reason in candidate.reasons if reason.field == "title")
+    assert "站点模式与数据分析网站发布" in title_reason.matches[0]
+    assert "corpus-weighted coverage" in title_reason.explanation
+    assert "部署=" in title_reason.explanation
+    assert any(
+        reason.field == "keywords" and "发布" in reason.matches
+        for reason in candidate.reasons
+    )
+
+
 def test_semantic_similarity_surfaces_different_motion_wording_without_mapping():
     motion = _entry(
         "motion-consistency",

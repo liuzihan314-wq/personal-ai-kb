@@ -7,6 +7,7 @@ traceable without introducing a vector database.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from math import log
 from pathlib import Path
 
 from pkb.index.keywords import normalize_term, tokenize_text
@@ -42,6 +43,18 @@ RELATED_WEIGHT = 0.10
 SEMANTIC_MIN_SIMILARITY = 0.08
 _DIRECT_FIELDS: tuple[RetrievalField, ...] = ("title", "tags", "keywords", "topic")
 _ALL_FIELDS: tuple[RetrievalField, ...] = (*_DIRECT_FIELDS, "semantic", "related")
+
+# Small, explicit vocabulary for the mixed Chinese site/deployment intent seen
+# in local searches. Expansion is directional: a query may find equivalent
+# wording in an Index field without rewriting or persisting the query.
+_QUERY_ALIASES: Mapping[str, tuple[str, ...]] = {
+    "网页": ("网站", "站点"),
+    "网站": ("网页", "站点"),
+    "站点": ("网页", "网站"),
+    "部署": ("发布", "上线"),
+    "发布": ("部署", "上线"),
+    "上线": ("部署", "发布"),
+}
 
 
 @dataclass(frozen=True)
@@ -102,7 +115,11 @@ def _match_field(
     seen_terms: set[str] = set()
     for value in _field_values(entry, field):
         value_terms = set(tokenize_text(value))
-        overlap = [term for term in query.terms if term in value_terms]
+        overlap = [
+            term
+            for term in query.terms
+            if value_terms.intersection((term, *_QUERY_ALIASES.get(term, ())))
+        ]
         if not overlap:
             continue
         value_key = normalize_term(value)
@@ -128,10 +145,63 @@ def _direct_matches(
     return matches
 
 
-def _coverage(matched_terms: Sequence[str], query: ParsedQuery) -> float:
+def _coverage(
+    matched_terms: Sequence[str],
+    query: ParsedQuery,
+    term_weights: Mapping[str, float] | None = None,
+) -> float:
     if not query.terms:
         return 0.0
-    return min(1.0, len(set(matched_terms)) / len(query.terms))
+    weights = term_weights or {}
+    denominator = sum(weights.get(term, 1.0) for term in query.terms)
+    numerator = sum(
+        weights.get(term, 1.0)
+        for term in set(matched_terms)
+        if term in query.terms
+    )
+    return min(1.0, numerator / denominator) if denominator else 0.0
+
+
+def _query_term_weights(
+    query: ParsedQuery,
+    entries: Mapping[str, IndexEntry] | None,
+) -> dict[str, float]:
+    """Discount frequent query terms using metadata document frequency."""
+
+    if not query.terms or not entries:
+        return {term: 1.0 for term in query.terms}
+
+    document_frequencies = {term: 0 for term in query.terms}
+    for entry in entries.values():
+        corpus_terms = {
+            term
+            for field in _DIRECT_FIELDS
+            for value in _field_values(entry, field)
+            for term in tokenize_text(value)
+        }
+        for term in query.terms:
+            aliases = (term, *_QUERY_ALIASES.get(term, ()))
+            if corpus_terms.intersection(aliases):
+                document_frequencies[term] += 1
+
+    corpus_size = len(entries)
+    return {
+        term: 1.0 + log((corpus_size + 1) / (frequency + 1))
+        for term, frequency in document_frequencies.items()
+    }
+
+
+def _coverage_explanation(
+    terms: Sequence[str],
+    query: ParsedQuery,
+    term_weights: Mapping[str, float],
+) -> str:
+    matched = sorted(set(terms))
+    weights = ", ".join(f"{term}={term_weights.get(term, 1.0):.2f}" for term in matched)
+    return (
+        f"corpus-weighted coverage {_coverage(matched, query, term_weights):.3f}; "
+        f"query-term weights: {weights}"
+    )
 
 
 def _related_sort_key(link: RelatedEntry) -> tuple[float, str]:
@@ -143,6 +213,7 @@ def _related_matches(
     query: ParsedQuery,
     entries_by_id: Mapping[str, IndexEntry],
     semantic_index: EmbeddingSemanticIndex | None,
+    term_weights: Mapping[str, float],
 ) -> tuple[list[str], list[RetrievalReason], float]:
     """Score existing links whose target matches directly or semantically."""
 
@@ -172,7 +243,7 @@ def _related_matches(
             for field in _DIRECT_FIELDS
             for term in target_matches.get(field, _FieldMatch((), ())).terms
         ]
-        direct_coverage = _coverage(target_terms, query)
+        direct_coverage = _coverage(target_terms, query, term_weights)
         coverage = max(
             direct_coverage,
             target_semantic.similarity if target_semantic is not None else 0.0,
@@ -245,6 +316,7 @@ def score_candidate(
     query: str | ParsedQuery,
     *,
     entries: Mapping[str, IndexEntry] | None = None,
+    term_weights: Mapping[str, float] | None = None,
     semantic_index: EmbeddingSemanticIndex | None = None,
     embedding_client: EmbeddingClient | None | object = _EMBEDDING_AUTO,
 ) -> RetrievalCandidate | None:
@@ -266,6 +338,9 @@ def score_candidate(
             corpus = (*corpus, entry)
         semantic_index = EmbeddingSemanticIndex(corpus, embedding_client)
 
+    if term_weights is None:
+        term_weights = _query_term_weights(parsed, entries)
+
     direct_matches = _direct_matches(entry, parsed)
     reasons: list[RetrievalReason] = []
     evidence_values: dict[str, list[str]] = {field: [] for field in _ALL_FIELDS}
@@ -273,7 +348,8 @@ def score_candidate(
         match = direct_matches.get(field)
         if match is None:
             continue
-        contribution = FIELD_WEIGHTS[field] * _coverage(match.terms, parsed)
+        coverage = _coverage(match.terms, parsed, term_weights)
+        contribution = FIELD_WEIGHTS[field] * coverage
         evidence_values[field] = list(match.values)
         reasons.append(
             RetrievalReason(
@@ -281,7 +357,8 @@ def score_candidate(
                 matches=list(match.values),
                 score=round(contribution, 4),
                 explanation=(
-                    f"{field} matched query terms: {', '.join(match.terms)}"
+                    f"{field} matched query terms: {', '.join(match.terms)}; "
+                    f"{_coverage_explanation(match.terms, parsed, term_weights)}"
                 ),
             ),
         )
@@ -314,6 +391,7 @@ def score_candidate(
             parsed,
             entries,
             semantic_index,
+            term_weights,
         )
         if related_ids:
             evidence_values["related"] = related_ids
@@ -358,6 +436,7 @@ def rank_candidates(
         if embedding_client is not None and embedding_client is not _EMBEDDING_AUTO
         else None
     )
+    term_weights = _query_term_weights(parsed, entries_by_id)
     candidates = [
         candidate
         for entry in index.entries
@@ -366,6 +445,7 @@ def rank_candidates(
                 entry,
                 parsed,
                 entries=entries_by_id,
+                term_weights=term_weights,
                 semantic_index=semantic_index,
                 embedding_client=embedding_client,
             )
