@@ -187,4 +187,6 @@ def test_output_launcher_always_opens_current_source_in_passwordless_owner_mode(
     assert "export PKB_AUTH_ENABLED=false" in launcher
     assert "--server.address 127.0.0.1" in launcher
     assert "--server.runOnSave true" in launcher
+    assert 'MANAGED_REVISION' in launcher
+    assert '"$MANAGED_REVISION" != "$CURRENT_REVISION"' in launcher
     assert "output/app.py" not in launcher

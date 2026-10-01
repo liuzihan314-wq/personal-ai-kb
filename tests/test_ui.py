@@ -95,11 +95,17 @@ def test_answer_citations_link_to_the_unique_web_or_pdf_source(tmp_path, monkeyp
         ),
     ]
 
-    ui_app._render_cited_answer("网页（来源 1），PDF（来源 2）", sources, raw_dir=tmp_path)
+    ui_app._render_cited_answer(
+        "网页（来源 1）、网页[来源 1]，PDF（来源 2）、PDF[来源 2]",
+        sources,
+        raw_dir=tmp_path,
+    )
 
     assert len(calls) == 1
     assert "[（来源 1）](<https://mp.weixin.qq.com/s/example?a=1&b=2>)" in calls[0]
     assert "[（来源 2）](?tab=search&source_preview=pdf-1)" in calls[0]
+    assert r"[\[来源 1\]](<https://mp.weixin.qq.com/s/example?a=1&b=2>)" in calls[0]
+    assert r"[\[来源 2\]](?tab=search&source_preview=pdf-1)" in calls[0]
 
 
 def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, monkeypatch):
@@ -140,9 +146,9 @@ def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, mo
         [source, duplicate, unsupported, missing_pdf],
         raw_dir=tmp_path,
     )
-    ui_app._render_answer_pdf_preview([source, duplicate], raw_dir=tmp_path)
+    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
     monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "missing-pdf"})
-    ui_app._render_answer_pdf_preview([missing_pdf], raw_dir=tmp_path)
+    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
 
     assert calls == [
         "无效（来源 2），冲突（来源 1），不支持（来源 3），"
@@ -167,23 +173,18 @@ def test_answer_pdf_preview_renders_a_synthetic_original_page(tmp_path, monkeypa
     original = tmp_path / "pdf-1" / "original.pdf"
     original.parent.mkdir()
     original.write_bytes(_make_pdf("synthetic original PDF"))
-    source = SimpleNamespace(
-        kind="note",
-        source_id="pdf-1",
-        citation_id="来源 1",
-        title="Synthetic PDF",
-        reference="raw:pdf-1",
-    )
     images = []
+    headings = []
     monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "pdf-1"})
     monkeypatch.setattr(ui_app.st, "selectbox", lambda _label, values, **_options: values[0])
     monkeypatch.setattr(ui_app.st, "image", lambda image, **_options: images.append(image))
-    monkeypatch.setattr(ui_app.st, "subheader", lambda _text: None)
+    monkeypatch.setattr(ui_app.st, "subheader", headings.append)
 
-    ui_app._render_answer_pdf_preview([source], raw_dir=tmp_path)
+    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
 
     assert len(images) == 1
     assert images[0].startswith(b"\x89PNG\r\n\x1a\n")
+    assert headings == ["原始 PDF 预览"]
 
 
 def _seed_script_library(data_dir: Path) -> TopicCandidate:

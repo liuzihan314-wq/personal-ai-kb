@@ -1042,6 +1042,8 @@ Acceptance：公众号引用链接到对应 HTTP(S) 原文；PDF 引用打开当
 
 Acceptance record: 2026-10-02 00:18 MAIN 验收通过。回答中的 `（来源 N）` 与来源链编号匹配后成为链接：HTTP(S) 原文链接可点击打开；PDF 引用会在知识库页面按页预览当前用户 Raw 目录中的 `original.pdf`。增加全角／半角括号、真实 `QASource`、缺失 PDF、重复编号、错误 URL scheme、路径穿越和合成 PDF 页面测试；完整测试套件 168 passed，含 5 条已知 PyMuPDF／SWIG 弃用警告；`git diff --check` 通过。无新依赖、无用户资料写入。实现提交 `d859b9b`，失败路径回归提交 `b2e84d2`；已合入 `main`（整合提交 `e296cf0`）。branch `codex/task-040-clickable-source-preview`，worktree `/Users/mac/.codex/worktrees/task-040-clickable-sources/personal-ai-kb-spec`。未执行浏览器 E2E；自动化 UI 测试验证链接目标、来源解析及 PDF 页图输出。
 
+Follow-up verification: 2026-10-02 00:37 MAIN 在当前 `main` 本地服务的真实浏览器页面核对：指定公众号文章在“AI部署网页”检索中列第 2；回答实际使用的 `[来源 N]` 已成为链接，公众号来源指向原文；点击 PDF 来源后在新的知识库标签页显示原始 PDF 首页。启动器现按 Git 提交版本识别并重启自身管理的旧进程，现场运行后 PID 从 `53456` 变为 `54631`，版本标记与当前 HEAD 一致，重启后 PDF 预览仍可用。修复方括号引用未链接、PDF 新标签页丢失问答会话，并将唯一的 `output/打开知识库.command` 纳入 Git，其他 `output/` 文件仍排除。相关 UI／认证测试 39 passed，`zsh -n` 与 `git diff --check` 通过；PDF 仅按当前已认证用户 Raw 目录和受校验文档 ID 读取。GitHub 尚未推送。
+
 ---
 
 ---

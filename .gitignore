@@ -22,7 +22,8 @@ config/invites.json
 # Local knowledge, runtime state, and generated deliverables
 data/
 runtime/
-output/
+output/*
+!output/打开知识库.command
 
 # macOS
 .DS_Store

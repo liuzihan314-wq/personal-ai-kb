@@ -20,6 +20,7 @@ from pkb.auth import (
     LocalAuthenticator,
 )
 from pkb.config import get_settings, save_local_settings
+from pkb.qa import QASource
 from pkb.retrieval import EmbeddingRequestError
 from pkb.providers import UnconfiguredProvider
 from pkb.ui.services import (
@@ -868,8 +869,9 @@ def _source_raw_path(source: Any, raw_dir: Path) -> Path | None:
     return None
 
 
-_ANSWER_CITATION = re.compile(r"[（(]来源\s*#?\s*(\d+)[）)]")
+_ANSWER_CITATION = re.compile(r"([（(\[【])来源\s*#?\s*(\d+)([）)\]】])")
 _CITATION_ID = re.compile(r"来源\s*#?\s*(\d+)")
+_CITATION_BRACKETS = {"（": "）", "(": ")", "[": "]", "【": "】"}
 
 
 def _citation_source_map(sources: Sequence[Any]) -> dict[str, Any]:
@@ -895,10 +897,12 @@ def _render_cited_answer(answer: str, sources: Sequence[Any], *, raw_dir: Path) 
     source_map = _citation_source_map(sources)
 
     def replace(match: re.Match[str]) -> str:
-        source = source_map.get(match.group(1))
+        if _CITATION_BRACKETS[match.group(1)] != match.group(3):
+            return match.group(0)
+        source = source_map.get(match.group(2))
         if source is None:
             return match.group(0)
-        label = match.group(0)
+        label = match.group(0).replace("[", r"\[").replace("]", r"\]")
         web_url = _source_web_url(source)
         if web_url:
             encoded_url = quote(web_url, safe=":/?#[]@!$&'()*+,;=%")
@@ -937,7 +941,8 @@ def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
         if not len(document):
             st.info("该来源的原始 PDF 当前不可用。")
             return
-        st.subheader(f"原始 PDF 预览：{getattr(source, 'title', '') or source.source_id}")
+        title = getattr(source, "title", "")
+        st.subheader(f"原始 PDF 预览：{title}" if title else "原始 PDF 预览")
         page_index = st.selectbox(
             "页码",
             range(len(document)),
@@ -957,21 +962,18 @@ def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
         document.close()
 
 
-def _render_answer_pdf_preview(sources: Sequence[Any], *, raw_dir: Path) -> None:
-    """Show only a PDF belonging to a unique citation in this answer."""
+def _render_requested_pdf_preview(*, raw_dir: Path) -> bool:
+    """Render a requested original for the authenticated user's Raw directory."""
 
     source_id = st.query_params.get("source_preview")
-    if not source_id:
-        return
-    matches = [
-        source
-        for source in _citation_source_map(sources).values()
-        if getattr(source, "source_id", None) == source_id
-    ]
-    if len(matches) != 1:
+    if source_id is None:
+        return False
+    if not isinstance(source_id, str) or not source_id:
         st.info("该来源的原始 PDF 当前不可用。")
-        return
-    _render_pdf_preview(matches[0], raw_dir=raw_dir)
+        return True
+    _render_pdf_preview(QASource(kind="raw", source_id=source_id), raw_dir=raw_dir)
+    st.caption("关闭此标签页即可返回原回答。")
+    return True
 
 
 def _render_sources(sources: Sequence[Any], *, raw_dir: Path) -> None:
@@ -1179,7 +1181,6 @@ def _render_search_qa_tab(service: UIService) -> None:
                 )
             else:
                 st.info(result.reason)
-            _render_answer_pdf_preview(result.sources, raw_dir=service.paths.raw_dir)
             _render_sources(result.sources, raw_dir=service.paths.raw_dir)
             for evidence in result.evidence:
                 st.caption(f"{evidence.source_kind}：{evidence.explanation}")
@@ -1459,6 +1460,8 @@ def main(service: UIService | None = None) -> None:
         invite_api_mode=invite_api_mode,
     )
     active_service = default_service if service is not None else _service_for_current_session(default_service)
+    if _render_requested_pdf_preview(raw_dir=active_service.paths.raw_dir):
+        return
     _render_brand_header()
     _render_flow_overview()
 
