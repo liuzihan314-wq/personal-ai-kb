@@ -18,10 +18,11 @@ from pkb.ui import UIPaths, UIService, can_generate_script
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 
 
-def _make_pdf(text: str) -> bytes:
+def _make_pdf(text: str, *additional_pages: str) -> bytes:
     document = pymupdf.open()
-    page = document.new_page()
-    page.insert_text((72, 72), text)
+    for page_text in (text, *additional_pages):
+        page = document.new_page()
+        page.insert_text((72, 72), page_text)
     payload = document.tobytes()
     document.close()
     return payload
@@ -108,6 +109,29 @@ def test_answer_citations_link_to_the_unique_web_or_pdf_source(tmp_path, monkeyp
     assert r"[\[来源 2\]](?tab=search&source_preview=pdf-1)" in calls[0]
 
 
+def test_answer_citations_do_not_emit_magic_none_in_streamlit_runner():
+    from streamlit.testing.v1 import AppTest
+    from pkb.ui import app as ui_app
+
+    # Imported functions bypass Streamlit's magic AST transformation. Run the
+    # actual entrypoint definitions as a main script to exercise that behavior.
+    source = Path(ui_app.__file__).read_text(encoding="utf-8")
+    source = source.rsplit('if __name__ == "__main__":', 1)[0]
+    source += '''
+from types import SimpleNamespace
+_sources = [SimpleNamespace(kind="raw", source_id="demo", citation_id="来源 1",
+    reference="https://mp.weixin.qq.com/s/synthetic", path=None)]
+_render_cited_answer("回答说明 None 值（来源 1）。再次引用（来源 1）。", _sources, raw_dir=Path("."))
+'''
+    app = AppTest.from_string(source).run()
+
+    assert not app.exception
+    rendered = [item.value for item in app.markdown]
+    assert len(rendered) == 1
+    assert "None 值" in rendered[0]
+    assert rendered[0].count("https://mp.weixin.qq.com/s/synthetic") == 2
+
+
 def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, monkeypatch):
     from pkb.ui import app as ui_app
 
@@ -172,19 +196,21 @@ def test_answer_pdf_preview_renders_a_synthetic_original_page(tmp_path, monkeypa
 
     original = tmp_path / "pdf-1" / "original.pdf"
     original.parent.mkdir()
-    original.write_bytes(_make_pdf("synthetic original PDF"))
+    original.write_bytes(_make_pdf("synthetic PDF page 1", "synthetic PDF page 2"))
     images = []
     headings = []
+    captions = []
     monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "pdf-1"})
-    monkeypatch.setattr(ui_app.st, "selectbox", lambda _label, values, **_options: values[0])
     monkeypatch.setattr(ui_app.st, "image", lambda image, **_options: images.append(image))
     monkeypatch.setattr(ui_app.st, "subheader", headings.append)
+    monkeypatch.setattr(ui_app.st, "caption", captions.append)
 
     assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
 
-    assert len(images) == 1
-    assert images[0].startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(images) == 2
+    assert all(image.startswith(b"\x89PNG\r\n\x1a\n") for image in images)
     assert headings == ["原始 PDF 预览"]
+    assert captions == ["共 2 页，向下滚动可查看完整 PDF。", "关闭此标签页即可返回原回答。"]
 
 
 def _seed_script_library(data_dir: Path) -> TopicCandidate:

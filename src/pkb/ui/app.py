@@ -828,7 +828,9 @@ def _source_web_url(source: Any) -> str | None:
         candidate = value.strip()
         try:
             parsed = urlparse(candidate)
-            parsed.port
+            # Access validates malformed ports; assignment prevents Streamlit
+            # magic from rendering the usually-None value during citation lookup.
+            _ = parsed.port
         except ValueError:
             continue
         if (
@@ -861,7 +863,7 @@ def _source_raw_path(source: Any, raw_dir: Path) -> Path | None:
         candidate = directory / filename
         try:
             resolved = candidate.resolve(strict=True)
-            resolved.relative_to(raw_root)
+            _ = resolved.relative_to(raw_root)
         except (OSError, ValueError):
             continue
         if resolved.is_file():
@@ -926,7 +928,7 @@ def _render_cited_answer(answer: str, sources: Sequence[Any], *, raw_dir: Path) 
 
 
 def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
-    """Render one page at a time from a safely resolved local PDF original."""
+    """Render every page from a safely resolved local PDF original."""
 
     raw_path = _source_raw_path(source, raw_dir)
     if raw_path is None or raw_path.suffix.lower() != ".pdf":
@@ -943,21 +945,17 @@ def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
             return
         title = getattr(source, "title", "")
         st.subheader(f"原始 PDF 预览：{title}" if title else "原始 PDF 预览")
-        page_index = st.selectbox(
-            "页码",
-            range(len(document)),
-            format_func=lambda index: str(index + 1),
-            key=f"source-preview-page-{source.source_id}",
-        )
-        pixmap = document.load_page(page_index).get_pixmap(
-            matrix=pymupdf.Matrix(1.5, 1.5),
-            alpha=False,
-        )
-        st.image(
-            pixmap.tobytes("png"),
-            caption=f"第 {page_index + 1} 页",
-            use_container_width=True,
-        )
+        st.caption(f"共 {len(document)} 页，向下滚动可查看完整 PDF。")
+        for page_index in range(len(document)):
+            pixmap = document.load_page(page_index).get_pixmap(
+                matrix=pymupdf.Matrix(1.25, 1.25),
+                alpha=False,
+            )
+            st.image(
+                pixmap.tobytes("png"),
+                caption=f"第 {page_index + 1} / {len(document)} 页",
+                use_container_width=True,
+            )
     finally:
         document.close()
 

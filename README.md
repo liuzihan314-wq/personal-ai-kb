@@ -53,7 +53,7 @@ uv run streamlit run src/pkb/ui/app.py --server.headless true --server.showEmail
 
 然后打开 <http://127.0.0.1:8501/>。第一次使用完整 AI 能力时，还需要在网页侧栏配置 AI Provider；只查看页面和使用部分本地检索能力不需要把 API Key 写进代码。
 
-维护者本机可以直接双击 `output/打开知识库.command`。这个启动器只监听 `127.0.0.1`，并强制使用 V1 主人免登录模式；它直接运行 `src/pkb/ui/app.py`，不会维护第二份网页副本。项目提交更新后，再次双击会重启该启动器管理的旧版本进程并打开新版页面。该启动器不能用于公网分享。
+维护者本机可以直接双击 `output/打开知识库.command`。这个启动器只监听 `127.0.0.1`，并强制使用 V1 主人免登录模式；它直接运行 `src/pkb/ui/app.py`，不会维护第二份网页副本。每次双击时，它会检查 branch／HEAD、`src/` Python 代码和依赖锁文件；发现变化（包括尚未提交的代码修改）就重启受它管理的旧服务，再打开当前代码版本。该启动器不能用于公网分享。
 
 当前仓库已有 [v0.1.0 Release](https://github.com/liuzihan314-wq/personal-ai-kb/releases/tag/v0.1.0)。其他人仍应先按本 README 完成本地安装和健康检查；完整 AI 能力还需要自行配置 Provider 和 API Key。
 

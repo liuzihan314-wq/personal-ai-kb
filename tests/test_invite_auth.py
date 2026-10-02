@@ -189,4 +189,7 @@ def test_output_launcher_always_opens_current_source_in_passwordless_owner_mode(
     assert "--server.runOnSave true" in launcher
     assert 'MANAGED_REVISION' in launcher
     assert '"$MANAGED_REVISION" != "$CURRENT_REVISION"' in launcher
+    assert 'root.joinpath("src").rglob("*.py")' in launcher
+    assert 'root / "uv.lock"' in launcher
+    assert 'root / "pyproject.toml"' in launcher
     assert "output/app.py" not in launcher

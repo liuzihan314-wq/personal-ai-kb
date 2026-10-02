@@ -1044,6 +1044,30 @@ Acceptance record: 2026-10-02 00:18 MAIN 验收通过。回答中的 `（来源 
 
 Follow-up verification: 2026-10-02 00:37 MAIN 在当前 `main` 本地服务的真实浏览器页面核对：指定公众号文章在“AI部署网页”检索中列第 2；回答实际使用的 `[来源 N]` 已成为链接，公众号来源指向原文；点击 PDF 来源后在新的知识库标签页显示原始 PDF 首页。启动器现按 Git 提交版本识别并重启自身管理的旧进程，现场运行后 PID 从 `53456` 变为 `54631`，版本标记与当前 HEAD 一致，重启后 PDF 预览仍可用。修复方括号引用未链接、PDF 新标签页丢失问答会话，并将唯一的 `output/打开知识库.command` 纳入 Git，其他 `output/` 文件仍排除。相关 UI／认证测试 39 passed，`zsh -n` 与 `git diff --check` 通过；PDF 仅按当前已认证用户 Raw 目录和受校验文档 ID 读取。GitHub 尚未推送。
 
+## TASK-041 — 完整 PDF 预览与清理问答输出
+
+Status: REVIEW（本地修复与真实网页验收 PASS，尚未提交）
+Dependencies: TASK-040
+Owner: MAIN
+
+目标：打开 PDF 来源后可连续滚动查看全部页；引用原文时不向回答区域写入多余的 `None`。
+
+Acceptance：多页 PDF 的每一页均按顺序显示并标注当前页／总页数；Streamlit 主脚本处理重复原文引用时，只渲染回答正文，不生成额外 `None` 元素；回答内容保持原样；既有引用链接、路径校验和 PDF 安全读取回归通过。
+
+Verification record: 2026-10-02 09:15 更正此前将合成文本过滤测试当成功能验收的结论。根因为主脚本 `_source_web_url` 中裸表达式 `parsed.port` 被 Streamlit Magic 转换成自动显示；无显式端口的 URL 返回 `None`，每处理一个引用就产生一个绿色标签。使用 AppTest 运行实际入口定义稳定复现：无任何 `None` 噪声的回答引用两次，修复前仍显示两个额外的 `` `None` ``。现改为赋值式校验端口及路径包含关系，保留安全校验；移除无证据的回答过滤，不再改写模型正文。AppTest 回归只显示一段含两次正常引用的回答；定向 UI 测试 33 passed，全量 169 passed（5 条已知 PyMuPDF／SWIG 弃用警告），`git diff --check` 通过。真实浏览器再次提交“AI部署网页目前有哪些快捷方法？”后直接显示正文，DOM 中独立 `None` code 元素数为 0，PDF／公众号引用链接保留；截图保存在 `output/TASK-041-none-fixed.jpg`。运行实例核对：`main`、HEAD `1c58ae2` 加本地修改、PID 62934、端口 8501、cwd `/Users/mac/Downloads/personal-ai-kb-spec`；当前源码热重载生效。PDF 两页按顺序渲染的既有测试通过；本轮未重新进行 PDF 浏览器操作。未新增依赖，未修改密钥或用户资料；尚未提交、未推送。
+
+## TASK-042 — 启动器检测未提交代码并避免旧版页面
+
+Status: DONE（本地已验收，尚未提交）
+Dependencies: TASK-041
+Owner: MAIN
+
+目标：每次双击本机启动器时，都能可靠判断现有网页进程是否加载了当前项目代码；新功能不应因代码尚未提交而继续打开旧进程。
+
+Acceptance：版本指纹至少包含当前 branch／HEAD、`src/**/*.py` 内容及依赖锁定文件；源码改变后启动器确认该进程由本机启动器管理，再重启并打开当前源码；无法计算指纹时失败关闭；文档规则与行为一致；启动器语法、回归测试和目标运行环境检查通过。
+
+Acceptance record: 2026-10-02 08:49 已通过启动器实测发现旧版比较 HEAD 无法检测未提交代码变化；现用 branch、HEAD、全部 `src/**/*.py`、`pyproject.toml` 和 `uv.lock` 组成版本指纹，指纹变化时只重启由该启动器管理的服务，计算失败则拒绝打开页面。规则写入 `AGENTS.md` 并更新 README。UI／启动器回归 40 passed，启动器语法、Python 编译、`git diff --check` 通过。主人已启动新版页面，现场确认进程从旧 PID 54745 更换为 PID 62934，运行指纹为 `2c910960…`，健康检查返回 `ok`；随后对 UI 源码修改由 Streamlit 热重载。本 Task 验收通过。改动尚未提交、未推送。
+
 ---
 
 ---

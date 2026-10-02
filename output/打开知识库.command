@@ -12,7 +12,6 @@ PID_FILE="$PROJECT_DIR/runtime/knowledge-base-ui.pid"
 MODE_FILE="$PROJECT_DIR/runtime/knowledge-base-ui.mode"
 REVISION_FILE="$PROJECT_DIR/runtime/knowledge-base-ui.revision"
 MODE_SIGNATURE="local-owner-v1"
-CURRENT_REVISION="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)"
 
 # 优先使用 uv 维护的 .venv；若不存在则回退到旧 runtime/python-venv。
 if [[ -x "$PROJECT_DIR/.venv/bin/streamlit" ]]; then
@@ -25,6 +24,34 @@ else
 fi
 
 STREAMLIT="$VENV_DIR/bin/streamlit"
+
+# Compare the commit plus actual application/dependency files. A Git HEAD-only
+# check misses uncommitted fixes, which are common during local verification.
+if ! CURRENT_REVISION="$("$VENV_DIR/bin/python" -c '
+import hashlib
+import pathlib
+import subprocess
+import sys
+
+root = pathlib.Path(sys.argv[1])
+digest = hashlib.sha256()
+for args in (["git", "-C", str(root), "rev-parse", "HEAD"], ["git", "-C", str(root), "branch", "--show-current"]):
+    result = subprocess.run(args, capture_output=True, text=True)
+    digest.update((result.stdout.strip() if result.returncode == 0 else "unknown").encode())
+    digest.update(b"\0")
+files = sorted(root.joinpath("src").rglob("*.py"))
+files.extend(path for path in (root / "pyproject.toml", root / "uv.lock") if path.is_file())
+for path in files:
+    if path.is_file():
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+print(digest.hexdigest())
+' "$PROJECT_DIR" 2>/dev/null)"; then
+  osascript -e 'display alert "无法确认知识库代码版本" message "请检查项目 Python 环境和源码后重试；为避免打开旧页面，启动已停止。" as critical'
+  exit 1
+fi
 
 # 本机主人入口只监听回环地址，并明确覆盖 .env 中可能启用的共享认证。
 # 公网分享必须使用独立的 invite 部署配置，不能运行此本机启动器。
