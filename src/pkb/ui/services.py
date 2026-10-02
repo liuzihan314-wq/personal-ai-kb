@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -377,6 +378,19 @@ class UIService:
             notes_dir=self.paths.notes_dir,
         ).compile(topic)
 
+    def library_revision(self) -> str:
+        """Fingerprint only this user's topic inputs; called on interaction, never polled."""
+
+        digest = hashlib.sha256()
+        files = [self.paths.index_path]
+        for directory in (self.paths.notes_dir, self.paths.knowledge_dir):
+            files.extend(sorted(directory.rglob("*.md")))
+        for path in files:
+            if path.is_file():
+                digest.update(str(path.relative_to(self.paths.data_dir)).encode())
+                digest.update(path.read_bytes())
+        return digest.hexdigest()
+
     def generate_topics(self, *, limit: int = 5) -> TopicGenerationResult:
         """Generate explainable topic candidates from local persisted data."""
 
@@ -384,7 +398,7 @@ class UIService:
             index_path=self.paths.index_path,
             knowledge_dir=self.paths.knowledge_dir,
             notes_dir=self.paths.notes_dir,
-        ).generate(limit=limit)
+        ).generate(limit=limit, provider=self.provider)
         self._append_history(
             HistoryRecord(
                 id=uuid4().hex,

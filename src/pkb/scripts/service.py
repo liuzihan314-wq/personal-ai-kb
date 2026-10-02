@@ -4,10 +4,9 @@ The writer deliberately keeps the V1 flow explicit:
 
 ``selected topic -> local Retrieval -> readable evidence -> script``
 
-It never writes Raw, Notes, Knowledge, or Index data.  The default provider is
-the existing network-free mock; a deterministic local template is used when
-that provider returns its short placeholder response, which keeps the minimal
-vertical slice useful without a network or a real model.
+It never writes Raw, Notes, Knowledge, or Index data. Drafts must come from a
+configured provider and pass the copy gate; rejected drafts are never replaced
+with a template assembled from article summaries.
 """
 
 from collections.abc import Sequence
@@ -25,7 +24,7 @@ from pkb.knowledge.storage import KnowledgeRecord
 from pkb.notes.markdown import NoteFormatError, parse_note
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord, NoteStorage, NoteStorageError
-from pkb.providers import AIProvider, MockAIProvider, ProviderDocument
+from pkb.providers import AIProvider, ProviderDocument, configured_provider
 from pkb.retrieval.model import RetrievalCandidate, RetrievalResult
 from pkb.retrieval.service import RetrievalService, parse_query
 from pkb.storage import RawStorage, RawStorageError
@@ -53,6 +52,10 @@ class ScriptStorageError(ScriptGenerationError):
 
 class ScriptProviderError(ScriptGenerationError):
     """Raised when the configured provider cannot write a script."""
+
+
+class ScriptQualityError(ScriptGenerationError):
+    """Two drafting attempts failed the publishable-copy gate."""
 
 
 IndexInput: TypeAlias = IndexFile | str | Path
@@ -429,7 +432,7 @@ class _ScriptWriterCore:
                 if self._index is not None
                 else RetrievalService(index_path=self.index_path)
             )
-        self.provider = provider or MockAIProvider()
+        self.provider = provider or configured_provider(get_settings())
 
     def _load_index(self) -> IndexFile:
         if self._index is not None:
@@ -740,110 +743,6 @@ class _ScriptWriterCore:
                 mapping[source.note_id] = source.raw_document_id or source.note_id
         return mapping
 
-    @staticmethod
-    def _fallback_script(
-        topic: str,
-        retrieval: RetrievalResult,
-        knowledge: Sequence[_LoadedKnowledge],
-        notes: Sequence[_ResolvedNote],
-        raw_materials: Sequence[_RawMaterial],
-    ) -> str:
-        """Compose a bounded, evidence-first Chinese script without new facts."""
-
-        topic_label = _excerpt(topic, limit=48)
-        paragraphs = [
-            (
-                f"很多人一听到“{topic_label}”，第一反应就是先找一个最强的工具。"
-                "但真正决定结果的，往往不是工具名单，而是你有没有把目标、步骤和判断标准想清楚。"
-                "接下来我们不绕概念，直接把这件事拆成能理解、能执行的几个关键点。"
-            )
-        ]
-
-        if knowledge:
-            lead = knowledge[0].knowledge
-            paragraphs.append(
-                f"先抓住主线：{_excerpt(lead.current_synthesis, limit=150)}"
-                "别急着把所有方法一次塞进去，先判断自己现在要解决的具体场景，"
-                "再决定哪些步骤必须保留，哪些环节可以暂时放下。"
-            )
-        elif notes:
-            paragraphs.append(
-                "先把范围说清楚：我们只讨论已经能够确认的做法。"
-                "你可以先拿一个真实任务跑通最小闭环，再逐步增加工具和复杂度。"
-            )
-
-        note_details: list[str] = []
-        transitions = ("第一个关键点是", "接着看第二个关键点", "再往下，还有一个容易忽略的地方", "最后补一个落地判断")
-        for index, resolved in enumerate(notes[:4]):
-            if resolved.note is None:
-                continue
-            note = resolved.note
-            detail = (
-                f"{transitions[index]}：{_excerpt(note.summary, limit=115)}"
-            )
-            if note.key_points:
-                detail += f"落到行动上，你可以先做这一步：{_excerpt(note.key_points[0], limit=85)}"
-            if index == 0 and note.quotes:
-                detail += f"有一句话很适合记住：{_excerpt(note.quotes[0], limit=55)}"
-            note_details.append(detail)
-        if note_details:
-            paragraphs.append("\n".join(note_details))
-
-        for material in raw_materials[:1]:
-            paragraphs.append(
-                "如果你想把它真正做出来，还要留意这个细节："
-                f"{_excerpt(material.content, limit=145)}"
-                "先用一个小样验证，再根据实际效果调整，比一开始追求完整更稳。"
-            )
-
-        paragraphs.append(
-            "所以，真正值得带走的不是又记住几个名词，而是形成一个顺序：先明确你要解决的问题，"
-            "再跑通最小步骤，然后用结果决定下一步。别让工具替你做判断，也别让复杂流程拖住第一次行动。"
-            "今天就挑一个最具体的场景试一次，做完再优化，你会比继续收藏一堆方法更快看到变化。"
-        )
-        return _fit_script(paragraphs)
-
-
-def _fit_script(paragraphs: Sequence[str]) -> str:
-    """Keep the deterministic fallback in the requested spoken-length band."""
-
-    cleaned = [
-        _sanitize_script_text(paragraph).strip()
-        for paragraph in paragraphs
-        if paragraph.strip()
-    ]
-    if not cleaned:
-        return ""
-    script = "\n\n".join(cleaned)
-    if len(script) < MIN_SCRIPT_CHARS:
-        script += (
-            "\n\n还有一个很实际的提醒：第一次尝试时，不要同时追求速度、质量和复杂度。"
-            "先确定一个最重要的结果，把流程完整走一遍，记录哪里最耗时间、哪里最容易返工。"
-            "第二次只改最影响结果的那个环节。这样每轮都有明确反馈，方法才会慢慢变成你自己的能力。"
-        )
-    if len(script) < MIN_SCRIPT_CHARS:
-        script += (
-            " 你不需要一次做到完美，先把第一版做出来，再用真实结果校准下一步。"
-            "能重复、能复盘、能继续改，才是一套真正有用的方法。"
-        )
-    if len(script) <= MAX_SCRIPT_CHARS:
-        return script
-
-    head = cleaned[0]
-    tail = cleaned[-1]
-    middle = "\n\n".join(cleaned[1:-1])
-    budget = MAX_SCRIPT_CHARS - len(head) - len(tail) - 4
-    if budget <= 0:
-        return (head[: MAX_SCRIPT_CHARS - len(tail) - 2] + "……\n\n" + tail)[
-            :MAX_SCRIPT_CHARS
-        ]
-    middle = middle[: max(0, budget - 1)].rstrip()
-    if middle:
-        middle += "…"
-        return f"{head}\n\n{middle}\n\n{tail}"
-    return f"{head}\n\n{tail}"
-
-
 def _sanitize_script_text(text: str) -> str:
     """Remove knowledge-base implementation labels from publishable copy."""
 
@@ -858,7 +757,7 @@ def _make_script_title(topic: str) -> str:
     """Create a publishable, curiosity-driven title from the confirmed topic."""
 
     clean_topic = _sanitize_script_text(_excerpt(topic, limit=42)).strip("「」\"“”")
-    return f"为什么学了很多 AI 还是用不起来？从「{clean_topic}」开始把判断变成执行"
+    return clean_topic
 
 
 def _has_spoken_hook(text: str) -> bool:
@@ -871,41 +770,54 @@ def _has_spoken_hook(text: str) -> bool:
     )
 
 
+def _format_spoken_copy(text: str) -> str:
+    """Keep Chinese/Latin boundaries readable without changing source names."""
+
+    text = re.sub(r"([\u4e00-\u9fff])([A-Za-z0-9])", r"\1 \2", text)
+    text = re.sub(r"([A-Za-z0-9])([\u4e00-\u9fff])", r"\1 \2", text)
+    return text.replace("——", "--").replace("—", "--")
+
+
+def _script_quality_issues(text: str, focus: str = "") -> list[str]:
+    issues = []
+    if not MIN_SCRIPT_CHARS <= len(text) <= MAX_SCRIPT_CHARS:
+        issues.append(f"正文需为 {MIN_SCRIPT_CHARS}～{MAX_SCRIPT_CHARS} 字符，当前 {len(text)} 字符")
+    if not _has_spoken_hook(text):
+        issues.append("开头需直接面向观众，提出一个具体痛点、问题或反常识判断")
+    if any(marker.casefold() in text.casefold() for marker in FORBIDDEN_SCRIPT_MARKERS) or re.search(
+        r"本文|本篇|这篇文章|第[\d一二三四五六七八九十百]+篇|系列导航|来源\s*[\d一二三四五六七八九十]+|Title:|Summary:|Key points:", text,
+    ):
+        issues.append("正文混入文章介绍、系列编号或资料字段，需要改写成直接对观众说的话")
+    if "…" in text or "..." in text:
+        issues.append("不要用省略号截断材料或观点，句子必须完整")
+    if focus and "".join(focus.casefold().split()) not in "".join(text.casefold().split()):
+        issues.append(f"正文偏离已确认主线“{focus}”，请只围绕它展开")
+    return issues
+
+
 class ScriptWriter(_ScriptWriterCore):
     """Write scripts after a fresh local retrieval."""
 
     def _write_script_text(
         self,
         topic: str,
-        retrieval: RetrievalResult,
         context: Sequence[ProviderDocument],
-        knowledge: Sequence[_LoadedKnowledge],
-        notes: Sequence[_ResolvedNote],
-        raw_materials: Sequence[_RawMaterial],
+        focus: str = "",
     ) -> str:
-        try:
-            generated = self.provider.write_script(
-                topic,
-                tuple(context),
-                target_seconds=TARGET_SECONDS,
-            )
-        except Exception as exc:
-            raise ScriptProviderError(
-                "Provider could not write a script from local evidence"
-            ) from exc
-        if isinstance(generated, str) and generated.strip():
-            candidate = generated.strip()
-            has_internal_markers = any(
-                marker.casefold() in candidate.casefold()
-                for marker in FORBIDDEN_SCRIPT_MARKERS
-            )
-            if (
-                MIN_SCRIPT_CHARS <= len(candidate) <= MAX_SCRIPT_CHARS
-                and not has_internal_markers
-                and _has_spoken_hook(candidate)
-            ):
+        issues = []
+        for attempt in range(2):
+            instruction = topic + (f"\n唯一口播主线：{focus}" if focus else "")
+            if attempt:
+                instruction += "\n编辑修订要求（不要写进口播）：" + "；".join(issues)
+            try:
+                generated = self.provider.write_script(instruction, tuple(context), target_seconds=TARGET_SECONDS)
+            except Exception as exc:
+                raise ScriptProviderError("Provider could not write a script from local evidence") from exc
+            candidate = _format_spoken_copy(generated.strip()) if isinstance(generated, str) else ""
+            issues = _script_quality_issues(candidate, focus)
+            if not issues:
                 return candidate
-        return self._fallback_script(topic, retrieval, knowledge, notes, raw_materials)
+        raise ScriptQualityError("；".join(issues))
 
     def write(
         self,
@@ -957,13 +869,22 @@ class ScriptWriter(_ScriptWriterCore):
         if limit is not None and limit <= 0:
             raise ScriptInputError("limit must be greater than zero")
 
+        focus = selection.candidate.focus if selection.candidate is not None else ""
         assert self.retrieval_service is not None
         try:
             # This is intentionally called on every confirmed write.  No
             # candidate retrieval result is cached from TopicGenerator.
-            retrieval = self.retrieval_service.search(topic_text, limit=limit)
+            retrieval = self.retrieval_service.search(focus or topic_text, limit=limit)
         except (FileNotFoundError, IndexStorageError) as exc:
             raise ScriptStorageError("Could not retrieve the local JSON Index") from exc
+
+        if focus and selection.candidate is not None:
+            allowed_ids = {source.source_id for source in selection.candidate.sources if source.kind == "note"}
+            selected = [item for item in retrieval.candidates if item.document_id in allowed_ids]
+            retrieval = retrieval.model_copy(update={
+                "candidates": selected,
+                "status": "ok" if selected else "no_hits",
+            })
 
         if not retrieval.candidates:
             return ScriptResult(
@@ -986,6 +907,10 @@ class ScriptWriter(_ScriptWriterCore):
             retrieval,
             loaded_knowledge,
         )
+        if focus:
+            # Broad compiled themes can contain unrelated Notes. For a precise
+            # editorial candidate, keep the selected Notes and their Raw only.
+            matched_knowledge = []
         raw_id_by_note = self._raw_id_map(matched_knowledge)
         resolved_notes = [
             self._resolve_note(candidate, index, loaded_notes, raw_id_by_note)
@@ -1035,14 +960,17 @@ class ScriptWriter(_ScriptWriterCore):
                 evidence=evidence,
             )
 
-        script = self._write_script_text(
-            topic_text,
-            retrieval,
-            tuple(context),
-            matched_knowledge,
-            resolved_notes,
-            raw_materials,
-        )
+        try:
+            script = self._write_script_text(
+                topic_text, tuple(context), focus=focus,
+            )
+        except ScriptQualityError as exc:
+            return ScriptResult(
+                topic=topic_text, status="quality_failed", selection_confirmed=True,
+                selection=selection,
+                message=f"口播经一次针对性重写仍未通过质量检查：{exc}。请重新生成或换一个更具体的选题。",
+                retrieval=retrieval, sources=list(source_map.values()), evidence=evidence,
+            )
         return ScriptResult(
             topic=topic_text,
             title=_make_script_title(topic_text),
@@ -1052,7 +980,7 @@ class ScriptWriter(_ScriptWriterCore):
             script=script,
             message=(
                 f"已确认选题并完成二次本地检索；口播基于 {len(context)} 份可读取证据生成，"
-                "未调用网络或向量数据库。"
+                "通过已配置的 AI 服务生成，仅使用本次选中的本地材料。"
             ),
             retrieval=retrieval,
             sources=list(source_map.values()),

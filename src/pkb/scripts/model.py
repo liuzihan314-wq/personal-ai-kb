@@ -13,6 +13,7 @@ ScriptStatus = Literal[
     "not_confirmed",
     "no_hits",
     "insufficient_evidence",
+    "quality_failed",
 ]
 ScriptSourceKind = Literal["knowledge", "note", "raw"]
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import pytest
 
 from pkb.index import IndexEntry, IndexFile
 from pkb.knowledge import KnowledgeSource, TopicKnowledge
@@ -149,7 +150,7 @@ def test_unconfirmed_selection_returns_structured_rejection_without_retrieval(tm
     assert retrieval.calls == 0
 
 
-def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path):
+def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path, spoken_copy):
     notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
 
     class CountingRetrieval(RetrievalService):
@@ -162,7 +163,7 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
             return super().search(query, limit=limit)
 
     retrieval = CountingRetrieval(_index(notes))
-    provider = MockAIProvider()
+    provider = MockAIProvider({"write_script": spoken_copy})
     writer = ScriptWriter(
         index=_index(notes),
         knowledge=[knowledge],
@@ -178,7 +179,7 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
     assert result.selection_confirmed is True
     assert result.selection.confirmed is True
     assert result.title
-    assert result.title.startswith("为什么学了很多 AI 还是用不起来")
+    assert result.title == candidate.title
     assert result.retrieval.status == "ok"
     assert MIN_SCRIPT_CHARS <= len(result.script_text) <= MAX_SCRIPT_CHARS
     assert "AI 工作流" in result.script_text
@@ -200,7 +201,7 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
     assert second.retrieval is not result.retrieval
 
 
-def test_fallback_script_sanitizes_internal_source_labels(tmp_path):
+def test_internal_source_labels_fail_quality_gate_without_a_template(tmp_path):
     notes = [
         _note(
             "internal-labels",
@@ -226,13 +227,11 @@ def test_fallback_script_sanitizes_internal_source_labels(tmp_path):
         provider=MockAIProvider(),
     ).write(notes[0].title, confirmed=True)
 
-    assert not any(
-        marker.casefold() in result.script_text.casefold()
-        for marker in ("来源一", "Raw", "Note", "Knowledge", "原始文章")
-    )
+    assert result.status == "quality_failed"
+    assert result.script is None
 
 
-def test_provider_copy_without_hook_falls_back_to_publishable_script(tmp_path):
+def test_provider_copy_without_hook_is_rejected_after_one_rewrite(tmp_path):
     notes, knowledge, _candidate, raw_dir = _fixed_library(tmp_path)
 
     class WeakProvider(MockAIProvider):
@@ -247,8 +246,9 @@ def test_provider_copy_without_hook_falls_back_to_publishable_script(tmp_path):
         provider=WeakProvider(),
     ).write(notes[0].title, confirmed=True)
 
-    assert result.script_text.startswith("很多人")
-    assert MIN_SCRIPT_CHARS <= len(result.script_text) <= MAX_SCRIPT_CHARS
+    assert result.status == "quality_failed"
+    assert result.script is None
+    assert "开头" in result.message
 
 
 def test_index_hit_without_readable_evidence_is_explicit(tmp_path):
@@ -267,7 +267,70 @@ def test_index_hit_without_readable_evidence_is_explicit(tmp_path):
     assert "证据不足" in result.message
 
 
-def test_cli_requires_confirm_and_returns_json_result(tmp_path):
+def test_invalid_draft_receives_specific_feedback_and_can_be_rewritten(tmp_path, spoken_copy):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+
+    class RepairingProvider(MockAIProvider):
+        def __init__(self):
+            super().__init__()
+            self.requests = []
+
+        def write_script(self, topic, context=(), *, target_seconds=150):
+            self.requests.append(topic)
+            return "本文是AI学习之路第20篇。" if len(self.requests) == 1 else spoken_copy
+
+    provider = RepairingProvider()
+    result = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
+    assert result.status == "generated" and result.script == spoken_copy
+    assert len(provider.requests) == 2
+    assert "编辑修订要求" in provider.requests[1] and "文章介绍" in provider.requests[1]
+    assert result.title == candidate.title
+
+
+def test_script_provider_error_is_not_replaced_with_a_draft(tmp_path):
+    from pkb.scripts import ScriptProviderError
+
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+
+    class BrokenProvider(MockAIProvider):
+        attempts = 0
+
+        def write_script(self, topic, context=(), *, target_seconds=150):
+            self.attempts += 1
+            raise RuntimeError("synthetic upstream failure")
+
+    provider = BrokenProvider()
+    with pytest.raises(ScriptProviderError):
+        ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
+    assert provider.attempts == 1
+
+
+def test_focused_candidate_excludes_unrelated_notes_and_broad_knowledge(tmp_path):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+    candidate = candidate.model_copy(update={"focus": "流程", "sources": [source for source in candidate.sources if source.kind == "note" and source.source_id == "workflow-1"]})
+
+    class CapturingProvider(MockAIProvider):
+        def __init__(self):
+            super().__init__()
+            self.contexts = []
+
+        def write_script(self, topic, context=(), *, target_seconds=150):
+            self.contexts.append(context)
+            return "不够长的稿件"
+
+    provider = CapturingProvider()
+    result = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
+    assert result.status == "quality_failed"
+    assert result.retrieval.query == "流程"
+    assert {item.document_id for item in result.retrieval.candidates} == {"workflow-1"}
+    assert len(provider.contexts) == 2
+    assert all(item.document_id == "workflow-1" for context in provider.contexts for item in context)
+    assert {source.kind for source in result.sources} == {"note", "raw"}
+    assert result.retrieval.status == "ok"
+
+
+def test_cli_requires_confirm_and_returns_json_result(tmp_path, monkeypatch, spoken_copy):
+    monkeypatch.setattr("pkb.scripts.service.configured_provider", lambda _settings: MockAIProvider({"write_script": spoken_copy}))
     notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
     notes_dir = tmp_path / "notes"
     for note in notes:

@@ -1,5 +1,6 @@
 import json
 import ssl
+import pytest
 
 from pkb.config import Settings
 from pkb.providers import (
@@ -12,6 +13,22 @@ from pkb.providers import (
     provider_from_values,
 )
 from pkb.providers import openai_compatible
+
+
+@pytest.mark.parametrize("wrapper", ["{body}", "```json\n{body}\n```", "```\n{body}\n```"])
+def test_editorial_topics_accept_only_complete_json_arrays(wrapper):
+    payload = json.dumps([{"title": "声音克隆怎么少走弯路？", "rationale": "参考音频质量", "focus": "声音克隆", "source_ids": ["voice"]}], ensure_ascii=False)
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=lambda *_: {"choices": [{"message": {"content": wrapper.format(body=payload)}}]})
+    result = provider.generate_topics([ProviderDocument(document_id="voice", content="声音克隆")])
+    assert result[0].focus == "声音克隆" and result[0].source_ids == ["voice"]
+
+
+def test_editorial_topics_reject_prose_and_malformed_json():
+    from pkb.providers.openai_compatible import ProviderRequestError
+
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=lambda *_: {"choices": [{"message": {"content": "下面是候选：[]"}}]})
+    with pytest.raises(ProviderRequestError):
+        provider.generate_topics()
 
 
 def test_mock_provider_implements_protocol_and_supports_summary_call():

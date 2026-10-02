@@ -32,6 +32,8 @@ class TopicSuggestion(BaseModel):
 
     title: str = Field(min_length=1)
     rationale: str = ""
+    focus: str = ""
+    source_ids: list[str] = Field(default_factory=list)
 
 
 @runtime_checkable

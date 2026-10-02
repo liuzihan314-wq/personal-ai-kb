@@ -1,10 +1,4 @@
-"""Generate deterministic, traceable content topics from the local KB.
-
-The service reads the existing Index, Notes, and Topic Knowledge files.  It
-does not write any of them, call a Provider, use a network, or require a
-vector store.  Topic titles are deliberately assembled from visible local
-signals and fixed editorial angle templates rather than invented by a model.
-"""
+"""Generate source-validated editorial topics, with a local-only CLI path."""
 
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -23,6 +17,7 @@ from pkb.knowledge.storage import KnowledgeRecord
 from pkb.notes.markdown import NoteFormatError, parse_note
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord
+from pkb.providers import AIProvider, ProviderDocument
 from pkb.topics.model import (
     TopicCandidate,
     TopicEvidence,
@@ -62,6 +57,14 @@ _EVIDENCE_ORDER = (
     "recent_material",
 )
 _IDEA_TYPES = frozenset({"idea", "quote", "inspiration", "judgment"})
+_GENERIC_EDITORIAL_LABELS = frozenset({
+    "ai", "人工智能", "ai视频", "ai视频制作", "ai使用技巧", "card", "idea",
+    "article", "knowledge", "note", "学习之路", "工作流", "使用技巧",
+})
+
+
+def _editorial_key(value: str) -> str:
+    return "".join(value.casefold().split())
 
 
 def _utc(value: datetime) -> datetime:
@@ -696,10 +699,7 @@ class TopicGenerator:
 
         primary_label = primary_signal[1]
         secondary_label = secondary_signal[1] if secondary_signal is not None else ""
-        if secondary_label and _canonical(primary_label) != _canonical(secondary_label):
-            topic_stem = f"{primary_label} × {secondary_label}"
-        else:
-            topic_stem = primary_label
+        topic_stem = primary_label
 
         if idea_sources:
             angle = "把个人判断落到可执行流程"
@@ -832,13 +832,73 @@ class TopicGenerator:
             reasons=reasons,
         )
 
-    def generate(self, *, limit: int = DEFAULT_LIMIT) -> TopicGenerationResult:
+    def _editorial_candidates(
+        self, notes: dict[str, _LoadedNote], provider: AIProvider, limit: int,
+    ) -> TopicGenerationResult:
+        """Bind semantic editorial proposals to concrete, current local Notes."""
+
+        documents = []
+        for document_id, loaded in sorted(notes.items()):
+            note = loaded.note
+            facts = "\n".join([note.summary, *note.key_points, *note.quotes])
+            if len(facts.strip()) < 30:
+                continue
+            documents.append(ProviderDocument(
+                document_id=document_id, title=note.title,
+                content=f"标签：{'、'.join(note.tags)}\n内容：{facts[:2200]}",
+            ))
+        if not documents:
+            return TopicGenerationResult(status="insufficient_data", candidates=[], message="没有足够内容形成具体选题。")
+        suggestions = provider.generate_topics(tuple(documents), limit=limit)
+        available = {item.document_id: item for item in documents}
+        candidates = []
+        seen_titles: set[str] = set()
+        seen_sources: set[frozenset[str]] = set()
+        for suggestion in suggestions:
+            focus = suggestion.focus.strip()
+            focus_key = _editorial_key(focus)
+            ids = frozenset(suggestion.source_ids)
+            title = suggestion.title.strip()
+            title_key = _editorial_key(title)
+            if (
+                len(focus_key) < 2 or focus_key in _GENERIC_EDITORIAL_LABELS
+                or not ids or not ids <= available.keys()
+                or not 6 <= len(title) <= 70 or any(mark in title for mark in ("×", " + "))
+                or title_key in seen_titles or ids in seen_sources
+                or any(focus_key not in _editorial_key(available[item].title + available[item].content) for item in ids)
+            ):
+                continue
+            sources = [_display_source(_note_source(
+                _note_index_entry(notes[item], str(self.notes_dir or "notes")), notes[item],
+            )) for item in sorted(ids)]
+            candidates.append(TopicCandidate(
+                title=title, focus=focus,
+                why_worth_doing=suggestion.rationale or f"围绕“{focus}”解释一个具体问题。",
+                score=round(min(0.95, 0.7 + 0.05 * len(ids)), 3),
+                sources=sources,
+                evidence=[
+                    TopicEvidence(signal="focus", values=[focus], source_ids=sorted(ids), explanation="主线短语在所有支持材料中出现。"),
+                    TopicEvidence(signal="content", values=[source.title for source in sources], source_ids=sorted(ids), explanation="这些资料支持该选题的具体内容。"),
+                ],
+                reasons=[TopicReason(rule="grounded_editorial_topic", matches=[focus], weight=0.7, explanation="具体主线与合法资料 ID 均通过校验。")],
+            ))
+            seen_titles.add(title_key)
+            seen_sources.add(ids)
+        return TopicGenerationResult(
+            status="ok" if len(candidates) >= 3 else "insufficient_data",
+            candidates=candidates[:limit],
+            message=f"根据最新资料生成 {len(candidates[:limit])} 个具体选题；未通过来源或重复校验的候选已排除。",
+        )
+
+    def generate(self, *, limit: int = DEFAULT_LIMIT, provider: AIProvider | None = None) -> TopicGenerationResult:
         """Return up to five stable, explainable candidates without writes."""
 
         if not 1 <= limit <= MAX_LIMIT:
             raise ValueError(f"limit must be between 1 and {MAX_LIMIT}")
 
         index, loaded_notes, loaded_knowledge = self._load_all()
+        if provider is not None:
+            return self._editorial_candidates(loaded_notes, provider, limit)
         source_map: dict[str, _SourceData] = {}
         notes_by_id: dict[str, _SourceData] = {}
         for entry in sorted(index.entries, key=lambda item: item.document_id):

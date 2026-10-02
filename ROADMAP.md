@@ -1046,7 +1046,7 @@ Follow-up verification: 2026-10-02 00:37 MAIN 在当前 `main` 本地服务的�
 
 ## TASK-041 — 完整 PDF 预览与清理问答输出
 
-Status: REVIEW（本地修复与真实网页验收 PASS，尚未提交）
+Status: DONE（本地修复与真实网页验收 PASS，提交 61cfaa2）
 Dependencies: TASK-040
 Owner: MAIN
 
@@ -1058,7 +1058,7 @@ Verification record: 2026-10-02 09:15 更正此前将合成文本过滤测试当
 
 ## TASK-042 — 启动器检测未提交代码并避免旧版页面
 
-Status: DONE（本地已验收，尚未提交）
+Status: DONE（本地已验收，提交 61cfaa2）
 Dependencies: TASK-041
 Owner: MAIN
 
@@ -1073,6 +1073,20 @@ Acceptance record: 2026-10-02 08:49 已通过启动器实测发现旧版比较 H
 ---
 
 # M9 — GitHub Presentation
+
+## TASK-043 — 具体选题与口播质量修复
+
+Status: REVIEW（183 项回归和真实网页内容验收 PASS，等待 main 集成与启动核对）
+Dependencies: TASK-041、TASK-042
+Owner: MAIN；当前对话执行
+
+目标：新增资料后旧选题与确认失效；从实际笔记提出具体问题，避免标签拼接；按候选主线与来源 ID 筛选写作证据；不合格稿针对性重写一次，仍失败则明确提示，不再拼接摘要兜底。
+
+施工清单与台账：`docs/tasks/TASK-043-editorial-topics-and-scripts.md`。Branch：`codex/task-043-content-quality`；Worktree：`/Users/mac/.codex/worktrees/task-043-content-quality/personal-ai-kb-spec`。无额外 Worker 或新聊天。
+
+Verification record: 2026-10-02 10:04 定向与完整合成测试 181 passed，覆盖新增资料失效、当前用户资料隔离、非法来源、重复选题、主线筛选、质量重写及 JSON 边界；保留 5 条已知 PyMuPDF／SWIG 弃用警告。真实本机实例 8504 明确加载该 worktree 的源码，PID 69914，cwd 为 main 项目以复用已有配置和资料；网页已生成 5 个具体选题，正在验证确认后的实际稿件。首次请求 JSON 解析失败，后续真实接口与网页请求成功；仅允许完整 JSON 或完整围栏 JSON，不从说明文字中猜测提取。无新增依赖，未修改密钥、Raw 或用户目录。
+
+Verification record: 2026-10-02 10:13 真实网页确认“为什么你的 AI 规则写了不生效？搞懂 worktree 的继承机制”，连续两次生成 655／744 字符稿件，均围绕规则继承、有问题式开场，正文没有声音克隆、文章介绍、编号或来源字段；二次检索只保留选题的两份 Note 与对应 Raw。新增 AI 错误不回退、中文英文交界排版回归，完整测试 183 passed，`git diff --check` 通过。截图 `output/TASK-043-script-verified.jpg` 为本地验收产物，不纳入 Git。首次 JSON 失败的原始返回未保留，不断言具体返回故障原因；后续检查成功，围栏边界兼容仅处理合法完整 JSON。待集成后核对 main 的实际运行实例。
 
 ## TASK-034 — GitHub Project Introduction and Demo Assets
 

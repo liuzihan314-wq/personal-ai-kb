@@ -128,8 +128,10 @@ class OpenAICompatibleProvider:
             raise ProviderRequestError("AI Provider returned empty assistant content")
         return content.strip()
 
-    def _json_list(self, system: str, prompt: str) -> list[Any]:
+    def _json_list(self, system: str, prompt: str, *, allow_fence: bool = False) -> list[Any]:
         value = self._complete(system, prompt)
+        if allow_fence and value.startswith(("```json\n", "```\n")) and value.endswith("\n```"):
+            value = value.split("\n", 1)[1].rsplit("\n", 1)[0]
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError as exc:
@@ -208,8 +210,19 @@ class OpenAICompatibleProvider:
         limit: int = 3,
     ) -> list[TopicSuggestion]:
         values = self._json_list(
-            f"基于本地来源提出最多 {limit} 个中文内容选题。只输出 JSON 数组，每项含 title、rationale。",
+            (
+                f"你是中文自媒体选题编辑。根据给定材料提出最多 {limit} 个具体选题。"
+                "每题只讲一个观众问题、做法或取舍，标题自然、有吸引力、可直接发布。"
+                "禁止把主题标签用 ×、+ 或泛泛的‘可执行流程’强行拼接；禁止用 card、idea、"
+                "AI使用技巧等类型或宽泛标签充当选题。不要倒序重复或换个说法重复同一题。"
+                "资料支持不足时少出题，不凑满数量。一篇内容充分的材料也可以独立支撑一个选题。"
+                "只输出合法 JSON 数组，不要 Markdown 代码围栏或说明文字，每项含 title、rationale、focus、source_ids。"
+                "focus 必须是材料原文出现的一个具体连续短语，例如‘声音克隆’、‘worktree’；"
+                "不是‘AI’、‘AI视频’等宽泛分类。source_ids 是实际使用的材料 ID 数组，"
+                "只能从给定 ID 中选择，每份选中的材料都必须直接支持 focus。"
+            ),
             _context(context),
+            allow_fence=True,
         )
         suggestions = []
         for value in values:
@@ -236,6 +249,10 @@ class OpenAICompatibleProvider:
                 "输出 700 到 900 个中文字符，不要标题、提纲、Markdown 列表或写作说明。"
                 "正文禁止出现‘来源一’‘来源二’‘来源三’‘Raw’‘Note’‘Knowledge’"
                 "‘本地检索’‘根据资料’等知识库内部措辞，也不要向观众解释证据链。"
+                "不要出现‘本文’‘本篇’‘第几篇’‘系列导航’或材料标题；不要复制摘要、逐篇介绍文章。"
+                "整篇只围绕确认的问题展开，不能因为材料都含 AI 就串入别的领域。"
+                "先确定一个具体场景，再解释做法和取舍；用具体细节替代‘先跑通闭环’等套话。"
+                "不要用省略号截断引用或凑字数，不要承诺未经验证的流量、效果或收益。"
                 "只使用材料中能够支持的事实，不补充材料之外的数据和结论。"
             ),
             f"口播主题：{topic}\n目标时长：{target_seconds} 秒\n\n背景材料：\n{_script_context(context)}",

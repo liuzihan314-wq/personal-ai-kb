@@ -102,7 +102,7 @@ def test_history_is_scoped_to_each_user(tmp_path: Path) -> None:
     assert all("Alice" not in (record.question or "") for record in bob_records)
 
 
-def test_script_result_is_recorded_after_generation(tmp_path: Path) -> None:
+def test_script_result_is_recorded_after_generation(tmp_path: Path, spoken_copy) -> None:
     """A generated spoken script is appended to the current user's history."""
 
     service = UIService(
@@ -112,6 +112,15 @@ def test_script_result_is_recorded_after_generation(tmp_path: Path) -> None:
     service.add_idea("先改流程，再换工具。", tags=["AI", "workflow"])
     service.add_idea("把 AI 工具组合成可复用的效率流程。", tags=["AI", "workflow"])
     service.add_idea("自动化要嵌入工作流，先验证具体任务的收益。", tags=["automation", "workflow"])
+
+    from pkb.providers.protocol import TopicSuggestion
+
+    class EditorialProvider(MockAIProvider):
+        def generate_topics(self, context=(), *, limit=5):
+            source = next(item for item in context if "流程" in item.content)
+            return [TopicSuggestion(title="流程怎么改才能少做重复工作？", rationale="先明确重复步骤。", focus="流程", source_ids=[source.document_id])]
+
+    service.provider = EditorialProvider({"write_script": spoken_copy})
 
     topics = service.generate_topics()
     assert topics.candidates

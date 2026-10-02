@@ -639,9 +639,9 @@ def test_topic_gate_requires_selection_then_explicit_confirmation(tmp_path):
     assert _html('<unsafe & "value">') == "&lt;unsafe &amp; &quot;value&quot;&gt;"
 
 
-def test_confirmed_candidate_uses_script_writer_retrieval_and_source_chain(tmp_path):
+def test_confirmed_candidate_uses_script_writer_retrieval_and_source_chain(tmp_path, spoken_copy):
     candidate = _seed_script_library(tmp_path)
-    provider = MockAIProvider()
+    provider = MockAIProvider({"write_script": spoken_copy})
     service = UIService(UIPaths.from_data_dir(tmp_path), provider=provider)
 
     assert can_generate_script([candidate], candidate.title, confirmed=True)
@@ -664,6 +664,10 @@ def test_topic_synthesis_and_qa_use_the_existing_core_services(tmp_path):
     )
 
     knowledge = service.synthesize_topic("AI 工作流")
+    from pkb.providers import TopicSuggestion
+    service.provider = MockAIProvider({"generate_topics": [TopicSuggestion(
+        title="流程怎么改才能少做重复工作？", focus="流程", source_ids=["workflow-1"],
+    )]})
     topics = service.generate_topics()
     answer = service.answer("AI", limit=3)
 

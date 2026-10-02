@@ -42,6 +42,7 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "script_result": None,
     "topic_widget_previous": None,
     "topic_selection_confirmed": False,
+    "topics_revision": "",
     "provider_session": None,
     "embedding_session": None,
 }
@@ -79,6 +80,19 @@ def _invalidate_results_after_ingest(state: Any) -> None:
     for key in _INGEST_INVALIDATED_STATE:
         state[key] = None
     state["topic_selection_confirmed"] = False
+    state["topics_revision"] = ""
+    state["topic_select"] = ""
+
+
+def _invalidate_stale_topics(state: Any, revision: str) -> bool:
+    if state.get("topics_result") is None or state.get("topics_revision") == revision:
+        return False
+    for key in ("topics_result", "script_result", "topic_widget_previous"):
+        state[key] = None
+    state["topic_selection_confirmed"] = False
+    state["topic_select"] = ""
+    state["topics_revision"] = ""
+    return True
 
 
 def _show_error(error: Exception) -> None:
@@ -1069,6 +1083,7 @@ def _render_import_tab(service: UIService) -> None:
                     tags=idea_tags.split(",") if idea_tags else None,
                     note=idea_note or None,
                 )
+                _invalidate_results_after_ingest(st.session_state)
             except Exception as error:
                 _show_error(error)
     if st.session_state["last_ingest"] is not None:
@@ -1272,15 +1287,27 @@ def _render_topics_tab(service: UIService) -> None:
         "候选来自本地 Index、Notes 和 Topic Knowledge。确认一个方向之后，才会开放口播生成。",
         accent="pink",
     )
-    _render_card_heading("PUBLISH / TOPICS", "生成可解释的选题", "先看依据，再决定哪一个方向值得继续。")
+    try:
+        revision = service.library_revision()
+    except Exception as error:
+        _show_error(error)
+        return
+    if _invalidate_stale_topics(st.session_state, revision):
+        st.info("知识库资料已更新，旧候选和确认已清除。请重新生成选题。")
+    _render_card_heading("PUBLISH / TOPICS", "从最新资料发现选题", "每个方向只讲一个具体问题，先看依据，再确认口播主线。")
     if st.button(
         "生成选题",
         type="primary",
         use_container_width=True,
         key="generate_topics_button",
     ):
+        st.session_state["topics_result"] = None
+        st.session_state["script_result"] = None
+        st.session_state["topic_selection_confirmed"] = False
+        st.session_state["topic_select"] = ""
         try:
             st.session_state["topics_result"] = service.generate_topics(limit=5)
+            st.session_state["topics_revision"] = revision
             st.session_state["script_result"] = None
             st.session_state["topic_selection_confirmed"] = False
             st.session_state["topic_widget_previous"] = None
@@ -1362,6 +1389,7 @@ def _render_topics_tab(service: UIService) -> None:
         use_container_width=True,
     ) and allowed:
         assert candidate is not None
+        st.session_state["script_result"] = None
         try:
             st.session_state["script_result"] = service.write_script(
                 candidate,
@@ -1378,7 +1406,7 @@ def _render_topics_tab(service: UIService) -> None:
             f"""
             <div class="pkb-result-head">
                 <div>
-                    <span class="pkb-status-pill pkb-status-success">{_html(script_result.status)}</span>
+                    <span class="pkb-status-pill {'pkb-status-success' if script_result.status == 'generated' else 'pkb-status-pending'}">{_html(script_result.status)}</span>
                     <h3>口播结果</h3>
                 </div>
             </div>
