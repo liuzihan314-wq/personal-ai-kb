@@ -1094,6 +1094,8 @@ Status: DONE（183 项回归和真实网页验收 PASS，已集成 main）
 Dependencies: TASK-041、TASK-042
 Owner: MAIN；当前对话执行
 
+2026-10-02 15:08 验收修复：主人明确资料支撑事实，允许 AI 主动创作痛点、钩子、类比与转场。PRODUCT 和 README 已同步；写作提示词区分创意表达与事实性主张，移除仅凭开头词及标点拒绝成稿的误判规则。保留字数、主线、资料字段和截断检查。194 项全量回归通过，5 条既有 SWIG 警告；真实使用“13 条针对 Astra 节省 token 的建议”生成 709 字稿，开场围绕昂贵模型被琐事消耗的痛点，无质量错误。8501 已从 main 工作区重启，PID 4608；本轮无新依赖、无数据迁移、未修改密钥或用户资料，未推送。当前 MAIN 小范围修复原任务，不新增 Task／Worker。开场吸引力仍需实际编辑判断，不能由词语白名单保证。
+
 目标：新增资料后旧选题与确认失效；从实际笔记提出具体问题，避免标签拼接；按候选主线与来源 ID 筛选写作证据；不合格稿针对性重写一次，仍失败则明确提示，不再拼接摘要兜底。
 
 施工清单与台账：`docs/tasks/TASK-043-editorial-topics-and-scripts.md`。Branch：`codex/task-043-content-quality`；Worktree：`/Users/mac/.codex/worktrees/task-043-content-quality/personal-ai-kb-spec`。无额外 Worker 或新聊天。

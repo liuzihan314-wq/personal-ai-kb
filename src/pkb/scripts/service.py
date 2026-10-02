@@ -761,16 +761,6 @@ def _make_script_title(topic: str) -> str:
     return clean_topic
 
 
-def _has_spoken_hook(text: str) -> bool:
-    """Require an audience-facing opening before accepting provider copy."""
-
-    opening = text[:180]
-    return (
-        opening.startswith(("很多人", "你有没有", "为什么", "别再", "真正", "做"))
-        or any(token in opening for token in ("？", "！", "最没用", "问题不在", "关键是"))
-    )
-
-
 def _format_spoken_copy(text: str) -> str:
     """Keep Chinese/Latin boundaries readable without changing source names."""
 
@@ -783,8 +773,6 @@ def _script_quality_issues(text: str, focus: str = "") -> list[str]:
     issues = []
     if not MIN_SCRIPT_CHARS <= len(text) <= MAX_SCRIPT_CHARS:
         issues.append(f"正文需为 {MIN_SCRIPT_CHARS}～{MAX_SCRIPT_CHARS} 字符，当前 {len(text)} 字符")
-    if not _has_spoken_hook(text):
-        issues.append("开头需直接面向观众，提出一个具体痛点、问题或反常识判断")
     if any(marker.casefold() in text.casefold() for marker in FORBIDDEN_SCRIPT_MARKERS) or re.search(
         r"本文|本篇|这篇文章|第[\d一二三四五六七八九十百]+篇|系列导航|来源\s*[\d一二三四五六七八九十]+|Title:|Summary:|Key points:", text,
     ):

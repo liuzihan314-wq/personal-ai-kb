@@ -231,24 +231,33 @@ def test_internal_source_labels_fail_quality_gate_without_a_template(tmp_path):
     assert result.script is None
 
 
-def test_provider_copy_without_hook_is_rejected_after_one_rewrite(tmp_path):
+@pytest.mark.parametrize("opening", [
+    "把十页聊天记录一起交给 AI，不如先留下这次任务真正需要的背景。",
+    "收藏了一百个工具，重复的工作却还在手动做，卡住你的可能是流程。",
+])
+def test_original_opening_is_not_rejected_by_keyword_whitelist(tmp_path, spoken_copy, opening):
     notes, knowledge, _candidate, raw_dir = _fixed_library(tmp_path)
+    copy = opening + "\n\n" + spoken_copy.split("\n\n", 1)[1]
 
-    class WeakProvider(MockAIProvider):
+    class CreativeProvider(MockAIProvider):
+        attempts = 0
+
         def write_script(self, topic, context=(), *, target_seconds=150):
-            return "这里是一个没有开头钩子的说明。" * 120
+            self.attempts += 1
+            return copy
 
+    provider = CreativeProvider()
     result = ScriptWriter(
         index=_index(notes),
         knowledge=[knowledge],
         notes=notes,
         raw_dir=raw_dir,
-        provider=WeakProvider(),
+        provider=provider,
     ).write(notes[0].title, confirmed=True)
 
-    assert result.status == "quality_failed"
-    assert result.script is None
-    assert "开头" in result.message
+    assert result.status == "generated"
+    assert result.script.startswith(opening)
+    assert provider.attempts == 1
 
 
 def test_index_hit_without_readable_evidence_is_explicit(tmp_path):

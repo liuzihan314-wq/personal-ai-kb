@@ -15,6 +15,22 @@ from pkb.providers import (
 from pkb.providers import openai_compatible
 
 
+def test_script_prompt_allows_original_expression_with_grounded_facts():
+    captured = {}
+
+    def transport(url, headers, body):
+        captured.update(body=body)
+        return {"choices": [{"message": {"content": "原创口播"}}]}
+
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=transport)
+    provider.write_script("节省 token", [ProviderDocument(content="只传入当前任务相关背景。")])
+    instruction = captured["body"]["messages"][0]["content"]
+    assert "你必须自己创作开场" in instruction
+    assert "明确标注的假设场景" in instruction
+    assert "不得编造真实案例" in instruction
+    assert "只使用材料中能够支持的事实，不补充材料之外的数据和结论" not in instruction
+
+
 @pytest.mark.parametrize("wrapper", ["{body}", "```json\n{body}\n```", "```\n{body}\n```"])
 def test_editorial_topics_accept_only_complete_json_arrays(wrapper):
     payload = json.dumps([{"title": "声音克隆怎么少走弯路？", "rationale": "参考音频质量", "focus": "声音克隆", "source_ids": ["voice"]}], ensure_ascii=False)
