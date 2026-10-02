@@ -21,11 +21,12 @@
 
 ## 台账
 
-Task：TASK-044；Thread：当前 MAIN；Branch：codex/task-044-visual-material-plan；Worktree：/Users/mac/.codex/worktrees/task-044-visual-material-plan/personal-ai-kb-spec；Status：READY_FOR_INTEGRATION。
+Task：TASK-044；Thread：当前 MAIN；Branch：codex/task-044-visual-material-plan；Worktree：/Users/mac/.codex/worktrees/task-044-visual-material-plan/personal-ai-kb-spec；Status：DONE；实现提交：6f0856a，本地 main 已快进集成。
 
 ## 工作结果
 
 - 合格口播独立显示 3～5 条素材建议；每条映射真实段落，列出画面、准备步骤、工具类别和替代方案。来源资料与需自行拍摄的画面分开标记。
 - 素材规划正常只请求一次；实际网页首次请求失败后，增加仅重试素材规划一次，不重写已验收口播。两次失败、数量错误、空字段、无效段落、重复画面均保留口播并提示失败。
 - 2026-10-02 14:53 使用本机已有 PDF 资料完成选题→确认→口播→素材清单真实闭环，收到 5 条含实际准备步骤的建议，未声称画面已生成。截图：`output/TASK-044-visual-materials.png`（本地，不提交）。
-- 2026-10-02 14:55 全量 pytest 192 passed，5 条既有 SWIG 弃用警告；`git diff --check` 通过。未新增依赖，未修改密钥、用户资料、认证或数据路径。待集成后核对 8501 服务的 branch、HEAD、启动目录与页面。
+- 2026-10-02 14:55 全量 pytest 192 passed，5 条既有 SWIG 弃用警告；`git diff --check` 通过。未新增依赖，未修改密钥、用户资料、认证或数据路径。
+- 2026-10-02 14:57 本地 main HEAD 为 6f0856a，8501 健康检查为 `ok`，运行进程 cwd 指向 main 项目，页面可打开。此工具环境的 `open` 无法启动 `.command`／Terminal，故本轮运行验证使用当前会话直接启动的进程；启动器持久运行未在本轮验证，会话退出后进程可能停止。
