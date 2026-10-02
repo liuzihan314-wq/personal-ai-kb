@@ -10,6 +10,7 @@ from pkb.providers.protocol import (
     ProviderDocument,
     RelatedLink,
     TopicSuggestion,
+    VisualMaterialSuggestion,
 )
 
 
@@ -31,6 +32,9 @@ class UnconfiguredProvider:
 
     def _raise(self) -> None:
         raise ProviderNotConfiguredError(self.message)
+
+    def plan_visual_materials(self, topic: str, paragraphs: Sequence[str]) -> list[VisualMaterialSuggestion]:
+        self._raise()
 
     def summarize(self, document: DocumentInput) -> str:
         self._raise()

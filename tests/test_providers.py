@@ -31,6 +31,23 @@ def test_editorial_topics_reject_prose_and_malformed_json():
         provider.generate_topics()
 
 
+def test_visual_plan_prompt_uses_actual_script_paragraphs():
+    captured = {}
+    item = dict(paragraph=1, visual="同一主题两种提示词的真实结果对比", preparation=["输入同一主题并实际生成。"], tool="当前 AI 网页", alternative="制作两张输入截图。")
+
+    def transport(url, headers, body):
+        captured.update(body=body)
+        return {"choices": [{"message": {"content": json.dumps([item] * 3, ensure_ascii=False)}}]}
+
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=transport)
+    result = provider.plan_visual_materials("AI 写作", ["先给读者和场景，再明确要求。"])
+    assert len(result) == 3 and result[0].paragraph == 1
+    system, prompt = captured["body"]["messages"]
+    assert "不能编造结果" in system["content"]
+    assert "不得声称已录好" in system["content"]
+    assert "第 1 段：先给读者和场景，再明确要求。" in prompt["content"]
+
+
 def test_mock_provider_implements_protocol_and_supports_summary_call():
     provider = MockAIProvider()
     document = ProviderDocument(

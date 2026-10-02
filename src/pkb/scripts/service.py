@@ -25,6 +25,7 @@ from pkb.notes.markdown import NoteFormatError, parse_note
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord, NoteStorage, NoteStorageError
 from pkb.providers import AIProvider, ProviderDocument, configured_provider
+from pkb.providers.protocol import VisualMaterialSuggestion
 from pkb.retrieval.model import RetrievalCandidate, RetrievalResult
 from pkb.retrieval.service import RetrievalService, parse_query
 from pkb.storage import RawStorage, RawStorageError
@@ -798,6 +799,29 @@ def _script_quality_issues(text: str, focus: str = "") -> list[str]:
 class ScriptWriter(_ScriptWriterCore):
     """Write scripts after a fresh local retrieval."""
 
+    def _plan_visual_materials(self, topic: str, script: str) -> tuple[list[VisualMaterialSuggestion], str]:
+        paragraphs = [part.strip() for part in script.split("\n\n") if part.strip()]
+        for attempt in range(2):
+            try:
+                suggestions = self.provider.plan_visual_materials(topic, tuple(paragraphs))
+                if not 3 <= len(suggestions) <= 5:
+                    raise ValueError("material count must be 3–5")
+                materials = [VisualMaterialSuggestion.model_validate(item) for item in suggestions]
+                if any(item.paragraph > len(paragraphs) or any(not step.strip() for step in item.preparation) for item in materials):
+                    raise ValueError("invalid paragraph or empty step")
+                if len({item.visual.casefold() for item in materials}) != len(materials):
+                    raise ValueError("duplicate shots")
+                for item in materials:
+                    item.visual = _format_spoken_copy(item.visual)
+                    item.preparation = [_format_spoken_copy(step) for step in item.preparation]
+                    item.tool = _format_spoken_copy(item.tool)
+                    item.alternative = _format_spoken_copy(item.alternative)
+                return materials, "以下是需补录或制作的拍摄建议，不是已生成的视频。已有资料仅可作为内容参考。"
+            except Exception:
+                if attempt:
+                    return [], "素材清单两次请求或格式校验均未通过；合格口播稿已保留。请稍后重新生成。"
+        return [], "素材清单未生成；合格口播稿已保留。"
+
     def _write_script_text(
         self,
         topic: str,
@@ -971,6 +995,7 @@ class ScriptWriter(_ScriptWriterCore):
                 message=f"口播经一次针对性重写仍未通过质量检查：{exc}。请重新生成或换一个更具体的选题。",
                 retrieval=retrieval, sources=list(source_map.values()), evidence=evidence,
             )
+        visual_materials, visual_message = self._plan_visual_materials(topic_text, script)
         return ScriptResult(
             topic=topic_text,
             title=_make_script_title(topic_text),
@@ -978,6 +1003,8 @@ class ScriptWriter(_ScriptWriterCore):
             selection_confirmed=True,
             selection=selection,
             script=script,
+            visual_materials=visual_materials,
+            visual_materials_message=visual_message,
             message=(
                 f"已确认选题并完成二次本地检索；口播基于 {len(context)} 份可读取证据生成，"
                 "通过已配置的 AI 服务生成，仅使用本次选中的本地材料。"

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol, TypeAlias, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProviderDocument(BaseModel):
@@ -34,6 +34,18 @@ class TopicSuggestion(BaseModel):
     rationale: str = ""
     focus: str = ""
     source_ids: list[str] = Field(default_factory=list)
+
+
+class VisualMaterialSuggestion(BaseModel):
+    """A proposed shot, never a claim that a recorded asset exists."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    paragraph: int = Field(ge=1)
+    visual: str = Field(min_length=1)
+    preparation: list[str] = Field(min_length=1, max_length=5)
+    tool: str = Field(min_length=1)
+    alternative: str = Field(min_length=1)
 
 
 @runtime_checkable
@@ -89,3 +101,6 @@ class AIProvider(Protocol):
         target_seconds: int = 150,
     ) -> str:
         """Write a spoken script grounded in the supplied context."""
+
+    def plan_visual_materials(self, topic: str, paragraphs: Sequence[str]) -> list[VisualMaterialSuggestion]:
+        """Suggest 3–5 practical shots for an already accepted script."""

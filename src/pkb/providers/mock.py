@@ -9,6 +9,7 @@ from pkb.providers.protocol import (
     ProviderDocument,
     RelatedLink,
     TopicSuggestion,
+    VisualMaterialSuggestion,
 )
 
 
@@ -125,6 +126,9 @@ class MockAIProvider:
             for title in titles[: max(0, limit)]
         ]
         return cast(list[TopicSuggestion], self._response("generate_topics", default))
+
+    def plan_visual_materials(self, topic: str, paragraphs: Sequence[str]) -> list[VisualMaterialSuggestion]:
+        return cast(list[VisualMaterialSuggestion], self._response("plan_visual_materials", []))
 
     def write_script(
         self,

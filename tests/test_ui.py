@@ -18,6 +18,25 @@ from pkb.ui import UIPaths, UIService, can_generate_script
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 
 
+def test_visual_materials_render_separately_and_label_assets_honestly():
+    from streamlit.testing.v1 import AppTest
+
+    test = AppTest.from_string('''
+from types import SimpleNamespace
+from pkb.providers.protocol import VisualMaterialSuggestion
+from pkb.ui.app import _render_visual_materials
+item = VisualMaterialSuggestion(paragraph=1, visual="同一主题的提示词对比", preparation=["实际输入主题并录下结果。"], tool="当前 AI 网页／系统录屏", alternative="用输入截图与字幕卡。")
+result = SimpleNamespace(script_text="先说明读者和场景。", visual_materials=[item], visual_materials_message="这是拍摄建议，不是已生成的视频。", sources=[SimpleNamespace(available=True,title="写作参考文章")])
+_render_visual_materials(result)
+''').run()
+    assert not test.exception
+    assert test.subheader[0].value == "演示素材清单"
+    assert "需补录／制作" in test.expander[0].label
+    assert any("对应口播：**先说明读者和场景。" in item.value for item in test.markdown)
+    assert any("已有内容参考" in item.value for item in test.markdown)
+    assert "同一主题的提示词对比" in [item.value for item in test.text]
+
+
 def _make_pdf(text: str, *additional_pages: str) -> bytes:
     document = pymupdf.open()
     for page_text in (text, *additional_pages):

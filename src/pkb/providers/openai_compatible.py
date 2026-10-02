@@ -14,6 +14,7 @@ from pkb.providers.protocol import (
     ProviderDocument,
     RelatedLink,
     TopicSuggestion,
+    VisualMaterialSuggestion,
 )
 
 
@@ -232,6 +233,23 @@ class OpenAICompatibleProvider:
                 except ValueError:
                     continue
         return suggestions[:limit]
+
+    def plan_visual_materials(self, topic: str, paragraphs: Sequence[str]) -> list[VisualMaterialSuggestion]:
+        values = self._json_list(
+            "你是给新手创作者安排实拍素材的中文视频编辑。只围绕已经定稿的口播，提出 3 到 5 项可执行的演示建议，"
+            "不要改写口播、不要逐句重复，优先录屏、前后对比、操作过程与简单字幕卡。"
+            "每项给出对应 paragraph（实际段落编号）、visual（拍什么画面）、preparation（1 到 5 个具体操作步骤的字符串数组）、"
+            "tool（优先当前 AI 网页、系统录屏、现有剪辑工具等类别）、alternative（拍不到时的静态截图或字幕卡方案）。"
+            "必须说清展示的输入、操作、观察什么；不能只写‘配 AI 画面’或‘网上找素材’。"
+            "AI 写作题可用同一主题的简单提示词与补充背景后的提示词作对比，但真实结果要用户实际运行，不能编造结果或保证效果。"
+            "所有图片和视频都只是需要用户制作的建议，不得声称已录好、可直接下载或已在知识库找到视频；不要提供虚构链接、文件或实验数据。"
+            "不要推荐额外安装收费软件或不熟悉的工具，涉及公开录屏时提示隐藏账号、密钥和私人信息。"
+            "演示配置文件或真实对话时，优先使用脱敏的示例副本；不要要求修改创作者正在使用的正式配置。"
+            "只返回合法 JSON 数组，不要代码围栏或说明文字，所有字段均必须非空。",
+            f"选题：{topic}\n已定稿的口播：\n" + "\n\n".join(f"第 {i} 段：{text}" for i, text in enumerate(paragraphs, 1)),
+            allow_fence=True,
+        )
+        return [VisualMaterialSuggestion.model_validate(item) for item in values]
 
     def write_script(
         self,

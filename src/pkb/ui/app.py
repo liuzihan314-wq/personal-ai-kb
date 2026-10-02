@@ -1280,6 +1280,29 @@ def _topic_gate_state(
     return "已确认", f"「{selected_title}」已确认，可以生成口播。", allowed
 
 
+def _render_visual_materials(result: Any) -> None:
+    st.subheader("演示素材清单")
+    if not result.visual_materials:
+        st.warning(result.visual_materials_message or "此稿暂未附带素材清单，请重新生成口播。")
+        return
+    st.info(result.visual_materials_message)
+    reference_titles = list(dict.fromkeys(source.title for source in result.sources if source.available and source.title))
+    if reference_titles:
+        st.markdown("**已有内容参考：**" + "、".join(reference_titles) + "。原文见下方来源链；演示画面仍需自行录制或制作。")
+    paragraphs = [part.strip() for part in result.script_text.split("\n\n") if part.strip()]
+    for number, item in enumerate(result.visual_materials, 1):
+        with st.expander(f"素材 {number}｜对应第 {item.paragraph} 段｜需补录／制作", expanded=True):
+            st.markdown("**对应口播：**" + paragraphs[item.paragraph - 1])
+            st.markdown("**建议画面**")
+            st.text(item.visual)
+            st.markdown("**怎么准备**")
+            st.text("\n".join(f"{i}. {step}" for i, step in enumerate(item.preparation, 1)))
+            st.markdown("**建议工具**")
+            st.text(item.tool)
+            st.markdown("**拍不到时的替代方案**")
+            st.text(item.alternative)
+
+
 def _render_topics_tab(service: UIService) -> None:
     _render_section_header(
         "04",
@@ -1419,6 +1442,7 @@ def _render_topics_tab(service: UIService) -> None:
             if script_title:
                 st.text_input("建议发布标题", value=script_title)
             st.text_area("口播稿", value=script_result.script_text, height=360)
+            _render_visual_materials(script_result)
         else:
             st.warning(script_result.message)
         _render_retrieval(script_result.retrieval, heading="二次检索")

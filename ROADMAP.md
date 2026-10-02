@@ -1074,6 +1074,18 @@ Acceptance record: 2026-10-02 08:49 已通过启动器实测发现旧版比较 H
 
 # M9 — GitHub Presentation
 
+## TASK-044 — 口播演示素材清单
+
+Status: READY_FOR_INTEGRATION（真实网页最小样例和测试通过，待 main 实例验收）
+Dependencies: TASK-043
+Owner: MAIN；当前对话
+
+主人已确认在合格口播后单独提供 3～5 项可执行的素材建议，对应实际段落、画面、准备步骤、工具与替代方案。已有内容参考与需补录／制作的画面分开，不生成视频、不抓取外部素材、不改变选题与正文。
+
+施工与台账：`docs/tasks/TASK-044-visual-material-plan.md`；Branch：`codex/task-044-visual-material-plan`；Worktree：`/Users/mac/.codex/worktrees/task-044-visual-material-plan/personal-ai-kb-spec`。素材规划失败或格式不合格时仅重试清单一次，仍失败则保留口播并单独提示；正常时只增加一次 AI 请求。不推送／部署，不修改密钥、资料、认证或依赖。
+
+2026-10-02 14:53 真实网页使用已有 PDF 资料生成全局配置选题和合格口播，初次素材规划失败，单独诊断时同一稿件第二次请求返回 5 条；据此增加只针对素材清单的失败重试。再次从网页生成稿件后得到 5 条对应真实段落的画面、准备步骤、工具与替代方案，来源参考和待录画面分别标记；截图在本地 `output/TASK-044-visual-materials.png`。2026-10-02 14:55 全量测试 192 passed，5 条既有 SWIG 警告；待核对 main 8501 启动实例。
+
 ## TASK-043 — 具体选题与口播质量修复
 
 Status: DONE（183 项回归和真实网页验收 PASS，已集成 main）

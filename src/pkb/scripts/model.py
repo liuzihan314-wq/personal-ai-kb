@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pkb.retrieval.model import RetrievalResult
 from pkb.topics.model import TopicCandidate
+from pkb.providers.protocol import VisualMaterialSuggestion
 
 
 ScriptStatus = Literal[
@@ -148,6 +149,8 @@ class ScriptResult(BaseModel):
     retrieval: RetrievalResult
     sources: list[ScriptSource] = Field(default_factory=list)
     evidence: list[ScriptEvidence] = Field(default_factory=list)
+    visual_materials: list[VisualMaterialSuggestion] = Field(default_factory=list)
+    visual_materials_message: str = ""
 
     @model_validator(mode="after")
     def validate_state(self) -> "ScriptResult":

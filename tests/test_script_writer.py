@@ -196,7 +196,7 @@ def test_confirmed_topic_retrieves_again_and_generates_traceable_script(tmp_path
         "note",
         "raw",
     }
-    assert provider.calls == ["write_script", "write_script"]
+    assert provider.calls == ["write_script", "plan_visual_materials", "plan_visual_materials", "write_script", "plan_visual_materials", "plan_visual_materials"]
     assert retrieval.queries == [candidate.title, candidate.title]
     assert second.retrieval is not result.retrieval
 
@@ -303,6 +303,71 @@ def test_script_provider_error_is_not_replaced_with_a_draft(tmp_path):
     with pytest.raises(ScriptProviderError):
         ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
     assert provider.attempts == 1
+
+
+def _visual_items():
+    return [dict(paragraph=i, visual=f"展示第 {i} 步的输入与输出对比", preparation=["打开当前 AI 网页，输入稿件中的同一个主题。", "录下补充背景后的操作与真实结果，不预设结果。"], tool="当前 AI 网页＋系统录屏", alternative="用操作截图和字幕标出变化。") for i in range(1, 4)]
+
+
+def test_accepted_script_gets_separate_actionable_materials(tmp_path, spoken_copy):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+    provider = MockAIProvider({"write_script": spoken_copy, "plan_visual_materials": _visual_items()})
+    result = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
+    assert result.status == "generated" and result.script == spoken_copy
+    assert len(result.visual_materials) == 3
+    assert all(item.preparation and item.alternative and item.tool for item in result.visual_materials)
+    assert "需补录或制作" in result.visual_materials_message
+    assert "已有资料仅可作为内容参考" in result.visual_materials_message
+    assert "展示第" not in result.script_text
+    assert result.model_dump(mode="json")["visual_materials"][0]["paragraph"] == 1
+
+
+def test_material_planning_retries_without_regenerating_accepted_script(tmp_path, spoken_copy):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+
+    class TransientProvider(MockAIProvider):
+        def __init__(self):
+            super().__init__({"write_script": spoken_copy})
+            self.material_attempts = 0
+
+        def plan_visual_materials(self, topic, paragraphs):
+            self.material_attempts += 1
+            if self.material_attempts == 1:
+                raise ValueError("temporary malformed response")
+            return _visual_items()
+
+    provider = TransientProvider()
+    result = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=provider).write(candidate, confirmed=True)
+    assert result.status == "generated" and result.script == spoken_copy
+    assert len(result.visual_materials) == 3
+    assert provider.material_attempts == 2
+    assert provider.calls == ["write_script"]
+
+
+@pytest.mark.parametrize("failure", ["count", "paragraph", "step", "duplicate", "upstream"])
+def test_invalid_materials_preserve_the_accepted_script(tmp_path, spoken_copy, failure):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+    items = _visual_items()
+    if failure == "count":
+        items = items[:1]
+    elif failure == "paragraph":
+        items[0]["paragraph"] = 999
+    elif failure == "step":
+        items[0]["preparation"] = [" "]
+    elif failure == "duplicate":
+        items[1]["visual"] = items[0]["visual"]
+
+    class Provider(MockAIProvider):
+        def plan_visual_materials(self, topic, paragraphs):
+            assert paragraphs[0] == spoken_copy.split("\n\n")[0]
+            if failure == "upstream":
+                raise RuntimeError("synthetic failure")
+            return items
+
+    result = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=Provider({"write_script": spoken_copy})).write(candidate, confirmed=True)
+    assert result.status == "generated" and result.script == spoken_copy
+    assert result.visual_materials == []
+    assert "合格口播稿已保留" in result.visual_materials_message
 
 
 def test_focused_candidate_excludes_unrelated_notes_and_broad_knowledge(tmp_path):
