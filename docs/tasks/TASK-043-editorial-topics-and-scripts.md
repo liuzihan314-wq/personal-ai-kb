@@ -22,4 +22,10 @@
 
 ## 当前台账
 
-Task：TASK-043；Thread：当前 MAIN 对话；Branch：codex/task-043-content-quality；Worktree：/Users/mac/.codex/worktrees/task-043-content-quality/personal-ai-kb-spec；Status：IN_PROGRESS。
+Task：TASK-043；Thread：当前 MAIN 对话；Branch：codex/task-043-content-quality；Worktree：/Users/mac/.codex/worktrees/task-043-content-quality/personal-ai-kb-spec；Status：DONE；实现提交：8879173，已集成 main。
+
+## 交付与验收
+
+2026-10-02 10:16：完整测试 183 passed，保留 5 条已有 SWIG 弃用警告；真实网页同一选题两次生成 655／744 字符，单一主线、完整句子、问题式开场，未出现文章介绍、来源字段或无关声音克隆。main 的 8501 运行实例已确认加载 main 源码，新版实际生成 3 个通过来源与重复检查的候选。资料变化、隔离、错误输入、连续不合格与服务错误均有回归；不再用摘要模板代替失败稿。
+
+截图原样保存于主项目 output，未提交用户内容。仅复用已有依赖，未修改认证、密钥、Raw 或用户目录，未推送／部署。临时 8504 服务已停止。清理清单：任务 worktree 下可重建的 `tests/_tmp/`、`.pytest_cache/` 与 `__pycache__/`；保留 worktree 与验收截图，未主动删除文件。
