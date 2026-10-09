@@ -515,6 +515,10 @@ Suggested branch: `feat/manual-wechat-article`
 
 Acceptance record: 2026-09-15 MAIN verified the URL allow-list, immutable text Raw storage, normalized-URL deduplication, CLI/UI shared Core Service, manual fallback, Note/Index persistence and PDF/Idea regression. The public-article end-to-end slice used a temporary data directory and produced article Raw, Note and Index without recording article content in Git. HTTPS validation uses certifi's CA bundle; public fetches send a minimal mobile WeChat compatibility User-Agent and Chinese language header, without Cookie, login state, proxy, device fingerprint, CAPTCHA bypass or database access. Targeted tests passed (11); full regression passed (90), with the existing PyMuPDF/SWIG warnings only.
 
+Follow-up verification: 2026-10-08 22:36 用主人提供的公众号 URL 复现自动提取失败。当前公开页面仍返回文章正文，但标题和正文放在脚本初始化数据的 `msg_title` 与 `content_noencode` 字段，原解析器只识别 HTML 标题／正文容器。现在只读取这两个带引号的纯文本字段，并以 `ast.literal_eval` 解码；不执行页面脚本，不使用 Cookie、登录态或私有接口。真实 URL 解析出标题《真的不需要云端 Agent》和 1039 字正文；独立修复分支全量 `pytest` 195 passed，叠加到当前主工作区后全量 `pytest` 204 passed（均为 5 条既有 PyMuPDF／SWIG 弃用警告）。未写入用户 Raw／Note／Index，无新增依赖，`git diff --check` 通过。
+
+Follow-up verification: 2026-10-08 23:02 继续处理同一文章的 AI 笔记错误。真实调用复现 `extract_key_points` 返回带完整代码围栏的 JSON 数组，旧笔记调用未启用已有的围栏兼容；引用和标签调用正常。仅在关键点、引用、标签三个笔记入口启用完整围栏解析，仍拒绝说明文字、截断 JSON 和非数组；未改 API 参数或其他未提交改动。定向回归 53 passed，全量 225 passed（5 条既有 SWIG 警告）。同一真实文章在 `.tmp/wechat-note-json/20261008-225911/` 跑通 Raw → 真实 AI Note → Index，生成 5 条关键点、3 条引用、5 个标签，重复导入复用原记录。随后通过唯一图形启动器重启 main 的 8501 服务，PID 65804、cwd 和入口均为主项目，源码／依赖版本指纹匹配；原浏览器实际点击重试显示“已导入微信公众号文章”，Note 已生成、Index 25 条，目标文章仅有一条索引，3 条引用均能在原文找到。成功截图：`output/TASK-026-wechat-note-import.jpg`。本轮为主工作区局部修复，尚未新增提交、未推送；无新依赖、无迁移、未修改密钥。打包／独立安装不适用。
+
 Goal:
 
 为 V1 提供可靠的微信公众号文章输入入口，不依赖微信收藏数据库。
@@ -1076,9 +1080,15 @@ Acceptance record: 2026-10-02 08:49 已通过启动器实测发现旧版比较 H
 
 ## TASK-044 — 口播演示素材清单
 
-Status: DONE（本地 main 已集成；真实网页最小样例和测试通过）
+2026-10-09 21:22 主人授权提交现有修改；提交前核对全部 12 个改动文件，全量回归 225 passed（5 条既有 SWIG 警告），`git diff --check` 通过。公众号提取与笔记 JSON 围栏兼容已完成此前真实网页验收；素材清单独立重生成保持 REVIEW，完整真实网页复验仍未完成。本次仅本地提交，不推送，不提交用户资料、密钥、截图或临时文件。
+
+Status: REVIEW（稳定性修复及独立重生成已实现；本地交互与单篇真实验证通过，运行实例重启后完整网页复验待确认）
 Dependencies: TASK-043
 Owner: MAIN；当前对话
+
+2026-10-02 16:00 新增“重新生成素材清单”：仅使用当前口播标题及正文，不检索、不重写、不新增口播历史；保留原稿及证据。Streamlit AppTest 实际点击验证旧失败提示被新建议替换且正文不变，全量 203 项通过（5 条既有 SWIG 警告）。当前稳定性返工位于 main 主工作区；原浏览器会话重跑仍显示旧按钮版本，必须重启运行实例，不能以源码测试代替最终网页验收。无新依赖，不改用户资料／密钥。
+
+2026-10-02 15:17 稳定性返工：主人报告多次清单失败；原实现吞掉异常，历史失败没有具体记录，无法断言历史根因。使用当前失败稿单独调用及原网页再生成均成功。已补充脱敏错误分类，区分服务连接、HTTP 状态、JSON 结构、字段、数量和段落问题；DeepSeek 官方端点启用 `response_format=json_object`，提供明确 materials 容器、完整字段样例和实际段落范围，其他兼容端点不新增格式参数。改后同一真实稿件连续两次返回 5 条有效建议；201 项回归通过，5 条既有 SWIG 警告。重启 8501 后全流程验收在“生成选题”点击被自动审批拒绝，理由为整批私有资料发送至配置 Provider 缺少明确授权；已向主人询问，未绕过。此前整条复验未完成；当前使用只发送已生成口播的独立重生成路径，避免重新发送整库。官方依据：https://api-docs.deepseek.com/zh-cn/guides/json_mode/ 。
 
 主人已确认在合格口播后单独提供 3～5 项可执行的素材建议，对应实际段落、画面、准备步骤、工具与替代方案。已有内容参考与需补录／制作的画面分开，不生成视频、不抓取外部素材、不改变选题与正文。
 

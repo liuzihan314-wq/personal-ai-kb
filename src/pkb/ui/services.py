@@ -440,6 +440,10 @@ class UIService:
         )
         return result
 
+    def regenerate_visual_materials(self, result: ScriptResult) -> ScriptResult:
+        """Send only the existing copy, without re-reading the library or drafting."""
+        return ScriptWriter(provider=self.provider).regenerate_visual_materials(result)
+
     def list_history(self) -> list[HistoryRecord]:
         """Return the current user's operation history in chronological order."""
 

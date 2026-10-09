@@ -47,13 +47,37 @@ def test_editorial_topics_reject_prose_and_malformed_json():
         provider.generate_topics()
 
 
+@pytest.mark.parametrize("method", ["extract_key_points", "extract_quotes", "generate_tags"])
+@pytest.mark.parametrize("wrapper", ["{body}", "```json\n{body}\n```", "```\n{body}\n```"])
+def test_note_lists_accept_complete_json_with_optional_fence(method, wrapper):
+    body = json.dumps(["合成观点一", "合成观点二"], ensure_ascii=False)
+    provider = OpenAICompatibleProvider(
+        model="test", base_url="https://example.test/v1", api_key="test",
+        transport=lambda *_: {"choices": [{"message": {"content": wrapper.format(body=body)}}]},
+    )
+    assert getattr(provider, method)(ProviderDocument(content="合成资料")) == ["合成观点一", "合成观点二"]
+
+
+@pytest.mark.parametrize("method", ["extract_key_points", "extract_quotes", "generate_tags"])
+@pytest.mark.parametrize("content", ['说明：[]', '```json\n["残缺"', '```json\n[]\n```\n说明', '{}'])
+def test_note_lists_reject_prose_truncation_and_wrong_shape(method, content):
+    from pkb.providers.openai_compatible import ProviderRequestError
+
+    provider = OpenAICompatibleProvider(
+        model="test", base_url="https://example.test/v1", api_key="test",
+        transport=lambda *_: {"choices": [{"message": {"content": content}}]},
+    )
+    with pytest.raises(ProviderRequestError):
+        getattr(provider, method)(ProviderDocument(content="合成资料"))
+
+
 def test_visual_plan_prompt_uses_actual_script_paragraphs():
     captured = {}
     item = dict(paragraph=1, visual="同一主题两种提示词的真实结果对比", preparation=["输入同一主题并实际生成。"], tool="当前 AI 网页", alternative="制作两张输入截图。")
 
     def transport(url, headers, body):
         captured.update(body=body)
-        return {"choices": [{"message": {"content": json.dumps([item] * 3, ensure_ascii=False)}}]}
+        return {"choices": [{"message": {"content": json.dumps({"materials": [item] * 3}, ensure_ascii=False)}}]}
 
     provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=transport)
     result = provider.plan_visual_materials("AI 写作", ["先给读者和场景，再明确要求。"])
@@ -62,6 +86,30 @@ def test_visual_plan_prompt_uses_actual_script_paragraphs():
     assert "不能编造结果" in system["content"]
     assert "不得声称已录好" in system["content"]
     assert "第 1 段：先给读者和场景，再明确要求。" in prompt["content"]
+
+
+@pytest.mark.parametrize("base_url,forced", [("https://api.deepseek.com", True), ("https://example.test/v1", False)])
+def test_visual_plan_json_contract_and_endpoint_capability(base_url, forced):
+    captured = {}
+    item = dict(paragraph=1, visual="演示输入", preparation=["录制实际结果"], tool="录屏", alternative="截图")
+
+    def transport(url, headers, body):
+        captured.update(body)
+        return {"choices": [{"message": {"content": json.dumps({"materials": [item] * 3})}}]}
+
+    provider = OpenAICompatibleProvider(model="test", base_url=base_url, api_key="test", transport=transport)
+    assert len(provider.plan_visual_materials("演示", ["段落一"])) == 3
+    assert (captured.get("response_format") == {"type": "json_object"}) is forced
+    assert '"materials"' in captured["messages"][0]["content"]
+    assert "段落编号仅允许 1 到 1" in captured["messages"][1]["content"]
+
+
+@pytest.mark.parametrize("content", ['{"materials":', '{"materials":{}}', '{"wrong":[]}', '说明：{"materials":[]}'])
+def test_visual_plan_rejects_invalid_json_contract(content):
+    from pkb.providers.openai_compatible import ProviderRequestError
+    provider = OpenAICompatibleProvider(model="test", base_url="https://api.deepseek.com", api_key="test", transport=lambda *_: {"choices": [{"message": {"content": content}}]})
+    with pytest.raises(ProviderRequestError):
+        provider.plan_visual_materials("演示", ["第一段"])
 
 
 def test_mock_provider_implements_protocol_and_supports_summary_call():

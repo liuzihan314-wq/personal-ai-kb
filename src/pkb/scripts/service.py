@@ -12,8 +12,12 @@ with a template assembled from article summaries.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+import logging
 import re
 from typing import TypeAlias
+
+from pydantic import ValidationError
+from pkb.providers.openai_compatible import ProviderRequestError
 
 from pkb.config import get_settings
 from pkb.index.model import IndexFile
@@ -787,6 +791,13 @@ def _script_quality_issues(text: str, focus: str = "") -> list[str]:
 class ScriptWriter(_ScriptWriterCore):
     """Write scripts after a fresh local retrieval."""
 
+    def regenerate_visual_materials(self, result: ScriptResult) -> ScriptResult:
+        """Plan shots from the accepted copy alone, preserving its evidence and text."""
+        if result.status != "generated" or not result.script:
+            raise ScriptInputError("请先生成合格口播，再生成素材清单。")
+        materials, message = self._plan_visual_materials(result.title or result.topic or "口播演示", result.script_text)
+        return result.model_copy(update={"visual_materials": materials, "visual_materials_message": message})
+
     def _plan_visual_materials(self, topic: str, script: str) -> tuple[list[VisualMaterialSuggestion], str]:
         paragraphs = [part.strip() for part in script.split("\n\n") if part.strip()]
         for attempt in range(2):
@@ -805,9 +816,30 @@ class ScriptWriter(_ScriptWriterCore):
                     item.tool = _format_spoken_copy(item.tool)
                     item.alternative = _format_spoken_copy(item.alternative)
                 return materials, "以下是需补录或制作的拍摄建议，不是已生成的视频。已有资料仅可作为内容参考。"
-            except Exception:
+            except Exception as error:
+                if isinstance(error, ValidationError):
+                    names = {"paragraph": "段落编号", "visual": "建议画面", "preparation": "准备步骤", "tool": "建议工具", "alternative": "替代方案"}
+                    fields = list(dict.fromkeys(names.get(str(item["loc"][0]), "额外字段") if item["loc"] else "清单结构" for item in error.errors(include_input=False, include_url=False)))
+                    reason = "返回字段格式不符（" + "、".join(fields) + "）"
+                elif isinstance(error, ProviderRequestError):
+                    code = getattr(error.__cause__, "code", None)
+                    if isinstance(code, int):
+                        reason = f"AI 服务返回 HTTP {code}"
+                    elif str(error) in {"AI Provider did not return the requested JSON list", "AI Provider did not return a JSON list", "AI Provider did not return the requested JSON object"}:
+                        reason = "AI 返回的 JSON 清单结构不符"
+                    else:
+                        reason = "AI 服务连接失败或返回内容为空"
+                elif isinstance(error, ValueError):
+                    reason = {
+                        "material count must be 3–5": "清单数量不是 3～5 项",
+                        "invalid paragraph or empty step": "段落编号越界或准备步骤为空",
+                        "duplicate shots": "返回了重复画面",
+                    }.get(str(error), "清单校验失败")
+                else:
+                    reason = "清单内部处理错误（" + type(error).__name__ + "）"
+                logging.getLogger(__name__).warning("Material planning attempt %d: %s", attempt + 1, reason)
                 if attempt:
-                    return [], "素材清单两次请求或格式校验均未通过；合格口播稿已保留。请稍后重新生成。"
+                    return [], "素材清单重试后仍失败：" + reason + "。合格口播稿已保留。"
         return [], "素材清单未生成；合格口播稿已保留。"
 
     def _write_script_text(

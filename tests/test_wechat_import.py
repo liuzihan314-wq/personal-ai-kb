@@ -151,6 +151,33 @@ def test_auto_extract_success_uses_existing_document_contract_without_html_raw(t
     assert Path(result.document.original_file).suffix == ".txt"
 
 
+def test_auto_extract_reads_plain_text_from_wechat_page_bootstrap(tmp_path):
+    page = r"""
+    <html><head></head><body>
+      <script>
+        window.msg_title = window.title = 'Inline \'quoted\' title';
+        window.shareData = {
+          content_noencode: '第一段\n\n第二段\u0021'
+        };
+      </script>
+    </body></html>
+    """.encode("utf-8")
+    service = WeChatArticleService(
+        raw_dir=tmp_path / "raw",
+        notes_dir=tmp_path / "notes",
+        index_path=tmp_path / "index" / "index.json",
+        provider=MockAIProvider(),
+        fetcher=lambda _url: page,
+    )
+
+    result = service.import_article(ARTICLE_URL)
+
+    assert result.status == "imported"
+    assert result.document is not None
+    assert result.document.title == "Inline 'quoted' title"
+    assert result.document.content == "第一段\n第二段!"
+
+
 def test_downloader_uses_certifi_tls_context(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
 

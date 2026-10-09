@@ -37,6 +37,32 @@ _render_visual_materials(result)
     assert "同一主题的提示词对比" in [item.value for item in test.text]
 
 
+def test_material_retry_button_keeps_copy_and_updates_list():
+    from streamlit.testing.v1 import AppTest
+
+    test = AppTest.from_string('''
+import streamlit as st
+from types import SimpleNamespace
+from pkb.providers.protocol import VisualMaterialSuggestion
+from pkb.ui.app import _render_visual_materials
+class Service:
+    def regenerate_visual_materials(self, result):
+        item = VisualMaterialSuggestion(paragraph=1, visual="录制修改提示词前后的真实结果", preparation=["输入同一主题并录屏。"], tool="系统录屏", alternative="截图加字幕")
+        return SimpleNamespace(script_text=result.script_text, visual_materials=[item], visual_materials_message="素材已更新", sources=[])
+if "result" not in st.session_state:
+    st.session_state.result = SimpleNamespace(script_text="先说明读者和场景。", visual_materials=[], visual_materials_message="旧清单失败", sources=[])
+st.session_state.result = _render_visual_materials(st.session_state.result, Service())
+''').run()
+    assert not test.exception
+    assert test.warning[0].value == "旧清单失败"
+    test.button(key="regenerate_materials_button").click().run()
+    assert not test.exception
+    assert not test.warning
+    assert test.session_state.result.script_text == "先说明读者和场景。"
+    assert test.info[0].value == "素材已更新"
+    assert "录制修改提示词前后的真实结果" in [item.value for item in test.text]
+
+
 def _make_pdf(text: str, *additional_pages: str) -> bytes:
     document = pymupdf.open()
     for page_text in (text, *additional_pages):

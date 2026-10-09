@@ -331,6 +331,32 @@ def test_accepted_script_gets_separate_actionable_materials(tmp_path, spoken_cop
     assert result.model_dump(mode="json")["visual_materials"][0]["paragraph"] == 1
 
 
+def test_material_regeneration_uses_only_existing_copy(tmp_path, spoken_copy, monkeypatch):
+    notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
+    original = ScriptWriter(index=_index(notes), knowledge=[knowledge], notes=notes, raw_dir=raw_dir, provider=MockAIProvider({"write_script": spoken_copy, "plan_visual_materials": _visual_items()})).write(candidate, confirmed=True)
+
+    class MaterialsOnly(MockAIProvider):
+        def plan_visual_materials(self, topic, paragraphs):
+            assert topic == (original.title or original.topic)
+            assert "\n\n".join(paragraphs) == original.script_text
+            return _visual_items()
+
+    writer = ScriptWriter(provider=MaterialsOnly())
+    def forbidden(*args, **kwargs):
+        raise AssertionError("regeneration must not retrieve or rewrite")
+    monkeypatch.setattr(writer, "write", forbidden)
+    result = writer.regenerate_visual_materials(original)
+    assert result is not original
+    assert result.script == original.script
+    assert result.sources == original.sources
+    assert result.evidence == original.evidence
+    assert result.retrieval == original.retrieval
+    assert len(result.visual_materials) == 3
+    assert writer.provider.calls == []
+    with pytest.raises(ValueError, match="先生成合格口播"):
+        writer.regenerate_visual_materials(original.model_copy(update={"status": "quality_failed"}))
+
+
 def test_material_planning_retries_without_regenerating_accepted_script(tmp_path, spoken_copy):
     notes, knowledge, candidate, raw_dir = _fixed_library(tmp_path)
 
@@ -377,6 +403,20 @@ def test_invalid_materials_preserve_the_accepted_script(tmp_path, spoken_copy, f
     assert result.status == "generated" and result.script == spoken_copy
     assert result.visual_materials == []
     assert "合格口播稿已保留" in result.visual_materials_message
+
+
+def test_material_failure_reports_field_without_logging_payload(caplog):
+    from pkb.providers.protocol import VisualMaterialSuggestion
+
+    class BrokenProvider(MockAIProvider):
+        def plan_visual_materials(self, topic, paragraphs):
+            return [VisualMaterialSuggestion.model_validate(dict(paragraph="private-payload-secret"))]
+
+    result, message = ScriptWriter(provider=BrokenProvider())._plan_visual_materials("演示", "第一段")
+    assert result == []
+    assert "返回字段格式不符" in message and "段落编号" in message
+    assert "private-payload-secret" not in message + caplog.text
+    assert len(caplog.records) == 2
 
 
 def test_focused_candidate_excludes_unrelated_notes_and_broad_knowledge(tmp_path):

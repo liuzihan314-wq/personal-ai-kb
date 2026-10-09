@@ -1280,11 +1280,17 @@ def _topic_gate_state(
     return "已确认", f"「{selected_title}」已确认，可以生成口播。", allowed
 
 
-def _render_visual_materials(result: Any) -> None:
+def _render_visual_materials(result: Any, service: UIService | None = None) -> Any:
     st.subheader("演示素材清单")
+    if service is not None and st.button("重新生成素材清单", key="regenerate_materials_button", use_container_width=True):
+        try:
+            with st.spinner("正在根据当前口播设计演示画面……"):
+                result = service.regenerate_visual_materials(result)
+        except Exception as error:
+            _show_error(error)
     if not result.visual_materials:
         st.warning(result.visual_materials_message or "此稿暂未附带素材清单，请重新生成口播。")
-        return
+        return result
     st.info(result.visual_materials_message)
     reference_titles = list(dict.fromkeys(source.title for source in result.sources if source.available and source.title))
     if reference_titles:
@@ -1301,6 +1307,7 @@ def _render_visual_materials(result: Any) -> None:
             st.text(item.tool)
             st.markdown("**拍不到时的替代方案**")
             st.text(item.alternative)
+    return result
 
 
 def _render_topics_tab(service: UIService) -> None:
@@ -1442,7 +1449,8 @@ def _render_topics_tab(service: UIService) -> None:
             if script_title:
                 st.text_input("建议发布标题", value=script_title)
             st.text_area("口播稿", value=script_result.script_text, height=360)
-            _render_visual_materials(script_result)
+            script_result = _render_visual_materials(script_result, service)
+            st.session_state["script_result"] = script_result
         else:
             st.warning(script_result.message)
         _render_retrieval(script_result.retrieval, heading="二次检索")

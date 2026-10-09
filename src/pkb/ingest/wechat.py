@@ -6,6 +6,10 @@ back to an explicit manual title/body submission and never creates a partial
 Raw record.
 """
 
+import ast
+import re
+import ssl
+import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,10 +17,8 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
-import ssl
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
-import urllib.request
 
 import certifi
 
@@ -215,6 +217,8 @@ class _ArticleHTMLParser(HTMLParser):
         self.content_parts: list[str] = []
         self.author_parts: list[str] = []
         self.publish_time_parts: list[str] = []
+        self.script_parts: list[str] = []
+        self._script_depth = 0
         self._title_depth = 0
         self._document_title_depth = 0
         self._content_depth = 0
@@ -235,6 +239,9 @@ class _ArticleHTMLParser(HTMLParser):
         attributes = self._attributes(attrs)
         element_id = attributes.get("id", "").casefold()
         classes = set(attributes.get("class", "").casefold().split())
+
+        if tag == "script":
+            self._script_depth += 1
 
         if tag == "meta":
             property_name = (
@@ -309,8 +316,12 @@ class _ArticleHTMLParser(HTMLParser):
             self._author_depth -= 1
         if self._publish_time_depth:
             self._publish_time_depth -= 1
+        if tag == "script" and self._script_depth:
+            self._script_depth -= 1
 
     def handle_data(self, data: str) -> None:
+        if self._script_depth:
+            self.script_parts.append(data)
         if self._title_depth:
             self.title_parts.append(data)
         if self._document_title_depth:
@@ -329,6 +340,13 @@ class _ArticleHTMLParser(HTMLParser):
             or _clean_text("".join(self.document_title_parts))
         )
         content = _clean_text("".join(self.content_parts))
+        if not title:
+            title = _inline_article_value(
+                self.script_parts,
+                r"\bmsg_title\s*=\s*window\.title\s*=",
+            )
+        if not content:
+            content = _inline_article_value(self.script_parts, r"\bcontent_noencode\s*:")
         if not title or not content:
             raise ManualImportRequired(MANUAL_REQUIRED_MESSAGE)
         author = _clean_text("".join(self.author_parts)) or None
@@ -340,6 +358,24 @@ class _ArticleHTMLParser(HTMLParser):
             author=author,
             published_at=published_at,
         )
+
+
+def _inline_article_value(script_parts: list[str], field_pattern: str) -> str:
+    """Read a plain-text article field from WeChat's public page bootstrap data."""
+
+    string_literal = r"('(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\")"
+    pattern = re.compile(field_pattern + r"\s*" + string_literal, re.DOTALL)
+    for script in script_parts:
+        match = pattern.search(script)
+        if not match:
+            continue
+        try:
+            value = ast.literal_eval(match.group(1))
+        except (SyntaxError, ValueError):
+            continue
+        if isinstance(value, str):
+            return _clean_text(value)
+    return ""
 
 
 def _parse_article_html(html: bytes | str, source_url: str) -> FetchedWeChatArticle:

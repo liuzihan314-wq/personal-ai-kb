@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 import ssl
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 import certifi
@@ -103,7 +104,7 @@ class OpenAICompatibleProvider:
             raise ProviderRequestError("AI Provider returned a non-object response")
         return payload
 
-    def _complete(self, system: str, prompt: str) -> str:
+    def _complete(self, system: str, prompt: str, *, json_object: bool = False) -> str:
         body: dict[str, object] = {
             "model": self.model,
             "messages": [
@@ -113,6 +114,8 @@ class OpenAICompatibleProvider:
             "temperature": 0.2,
             "stream": False,
         }
+        if json_object:
+            body["response_format"] = {"type": "json_object"}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -129,14 +132,21 @@ class OpenAICompatibleProvider:
             raise ProviderRequestError("AI Provider returned empty assistant content")
         return content.strip()
 
-    def _json_list(self, system: str, prompt: str, *, allow_fence: bool = False) -> list[Any]:
-        value = self._complete(system, prompt)
+    def _json_list(self, system: str, prompt: str, *, allow_fence: bool = False, object_key: str | None = None) -> list[Any]:
+        # Force JSON only for the documented DeepSeek endpoint; other compatible
+        # services retain their existing request parameters.
+        force_json = bool(object_key) and urlparse(self.base_url).hostname == "api.deepseek.com"
+        value = self._complete(system, prompt, json_object=force_json)
         if allow_fence and value.startswith(("```json\n", "```\n")) and value.endswith("\n```"):
             value = value.split("\n", 1)[1].rsplit("\n", 1)[0]
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError as exc:
             raise ProviderRequestError("AI Provider did not return the requested JSON list") from exc
+        if object_key is not None:
+            if not isinstance(parsed, dict) or set(parsed) != {object_key}:
+                raise ProviderRequestError("AI Provider did not return the requested JSON object")
+            parsed = parsed[object_key]
         if not isinstance(parsed, list):
             raise ProviderRequestError("AI Provider did not return a JSON list")
         return parsed
@@ -153,6 +163,7 @@ class OpenAICompatibleProvider:
         values = self._json_list(
             "你是中文知识库编辑。只基于给定文本，返回 3 到 5 条关键点。只输出 JSON 字符串数组。",
             f"标题：{item.title or ''}\n\n文本：\n{item.content}",
+            allow_fence=True,
         )
         return [value.strip() for value in values if isinstance(value, str) and value.strip()]
 
@@ -161,6 +172,7 @@ class OpenAICompatibleProvider:
         values = self._json_list(
             "你是中文知识库编辑。只摘取给定文本中可直接引用的原句，最多 3 条。只输出 JSON 字符串数组；没有则输出 []。",
             f"标题：{item.title or ''}\n\n文本：\n{item.content}",
+            allow_fence=True,
         )
         return [value.strip() for value in values if isinstance(value, str) and value.strip()]
 
@@ -169,6 +181,7 @@ class OpenAICompatibleProvider:
         values = self._json_list(
             "你是中文知识库编辑。只基于给定文本生成 3 到 6 个简短标签。只输出 JSON 字符串数组。",
             f"标题：{item.title or ''}\n\n文本：\n{item.content}",
+            allow_fence=True,
         )
         return [value.strip() for value in values if isinstance(value, str) and value.strip()]
 
@@ -245,9 +258,15 @@ class OpenAICompatibleProvider:
             "所有图片和视频都只是需要用户制作的建议，不得声称已录好、可直接下载或已在知识库找到视频；不要提供虚构链接、文件或实验数据。"
             "不要推荐额外安装收费软件或不熟悉的工具，涉及公开录屏时提示隐藏账号、密钥和私人信息。"
             "演示配置文件或真实对话时，优先使用脱敏的示例副本；不要要求修改创作者正在使用的正式配置。"
-            "只返回合法 JSON 数组，不要代码围栏或说明文字，所有字段均必须非空。",
-            f"选题：{topic}\n已定稿的口播：\n" + "\n\n".join(f"第 {i} 段：{text}" for i, text in enumerate(paragraphs, 1)),
+            "只返回合法 JSON 对象，唯一根字段是 materials，值为 3 到 5 项的数组。不要代码围栏或说明文字。"
+            "每项仅有 paragraph、visual、preparation、tool、alternative 这五个字段。paragraph 必须是整数，"
+            "preparation 必须是字符串数组，其余字段是非空字符串。格式示例（示例只展示一项，实际须给 3 到 5 项）："
+            '{"materials":[{"paragraph":1,"visual":"展示实际输入与输出",'
+            '"preparation":["打开演示副本","录下实际操作结果"],"tool":"系统录屏",'
+            '"alternative":"用脱敏截图配字幕卡"}]}',
+            f"选题：{topic}\n段落编号仅允许 1 到 {len(paragraphs)}，同一段可以有不同画面，不能编造新段落。\n已定稿的口播：\n" + "\n\n".join(f"第 {i} 段：{text}" for i, text in enumerate(paragraphs, 1)),
             allow_fence=True,
+            object_key="materials",
         )
         return [VisualMaterialSuggestion.model_validate(item) for item in values]
 
