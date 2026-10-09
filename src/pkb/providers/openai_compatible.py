@@ -1,6 +1,7 @@
 """Small OpenAI-compatible chat-completions adapter with no vendor SDK."""
 
 import json
+import logging
 from collections.abc import Callable, Mapping, Sequence
 import ssl
 from typing import Any
@@ -225,7 +226,10 @@ class OpenAICompatibleProvider:
     ) -> list[TopicSuggestion]:
         values = self._json_list(
             (
-                f"你是中文自媒体选题编辑。根据给定材料提出最多 {limit} 个具体选题。"
+                f"你是中文自媒体选题编辑。根据给定材料提出 {min(3, limit)} 到 {limit} 个具体选题。"
+                "材料按导入时间从新到旧排列，并标明是否在最近7天导入。优先围绕最近7天的材料出题，"
+                "不足时使用较早材料补足；如果最近7天没有新材料，照常基于已有材料出题，不得因此返回空数组。"
+                "内容充分的一篇材料可以从不同具体角度提出多个选题，不要求每题使用不同材料。"
                 "每题只讲一个观众问题、做法或取舍，标题自然、有吸引力、可直接发布。"
                 "禁止把主题标签用 ×、+ 或泛泛的‘可执行流程’强行拼接；禁止用 card、idea、"
                 "AI使用技巧等类型或宽泛标签充当选题。不要倒序重复或换个说法重复同一题。"
@@ -234,17 +238,26 @@ class OpenAICompatibleProvider:
                 "focus 必须是材料原文出现的一个具体连续短语，例如‘声音克隆’、‘worktree’；"
                 "不是‘AI’、‘AI视频’等宽泛分类。source_ids 是实际使用的材料 ID 数组，"
                 "只能从给定 ID 中选择，每份选中的材料都必须直接支持 focus。"
+                '格式示例：[{"title":"声音克隆如何准备参考音频？","rationale":"解释音频准备步骤",'
+                '"focus":"参考音频","source_ids":["实际材料ID"]}]。不得照抄示例ID。'
             ),
             _context(context),
             allow_fence=True,
         )
         suggestions = []
+        invalid_count = 0
         for value in values:
             if isinstance(value, dict):
                 try:
                     suggestions.append(TopicSuggestion.model_validate(value))
                 except ValueError:
-                    continue
+                    invalid_count += 1
+            else:
+                invalid_count += 1
+        if invalid_count and not suggestions:
+            raise ProviderRequestError(f"AI 返回的 {invalid_count} 个选题字段格式均不符合要求。")
+        if invalid_count:
+            logging.getLogger(__name__).warning("Topic response rejected %d items with invalid fields", invalid_count)
         return suggestions[:limit]
 
     def plan_visual_materials(self, topic: str, paragraphs: Sequence[str]) -> list[VisualMaterialSuggestion]:

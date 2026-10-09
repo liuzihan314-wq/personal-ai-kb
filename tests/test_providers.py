@@ -271,3 +271,25 @@ def test_session_provider_values_create_a_real_provider_without_settings_file():
 
     assert isinstance(provider, OpenAICompatibleProvider)
     assert provider.model == "custom-model"
+
+
+def test_editorial_prompt_requires_recent_priority_with_old_material_fallback():
+    captured = {}
+    def transport(url, headers, body):
+        captured.update(body)
+        return {"choices": [{"message": {"content": "[]"}}]}
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=transport)
+    provider.generate_topics(limit=5)
+    instruction = captured["messages"][0]["content"]
+    assert "3 到 5 个" in instruction
+    assert "最近7天没有新材料" in instruction
+    assert "较早材料补足" in instruction
+    assert "不同具体角度" in instruction
+
+
+def test_editorial_invalid_fields_report_count_without_payload():
+    from pkb.providers.openai_compatible import ProviderRequestError
+    provider = OpenAICompatibleProvider(model="test", base_url="https://example.test/v1", api_key="test", transport=lambda *_: {"choices": [{"message": {"content": '[{"title": {"private": "secret"}}, 2]'}}]})
+    with pytest.raises(ProviderRequestError, match="2 个选题字段格式") as error:
+        provider.generate_topics()
+    assert "secret" not in str(error.value)

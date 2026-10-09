@@ -18,6 +18,7 @@ from pkb.notes.markdown import NoteFormatError, parse_note
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord
 from pkb.providers import AIProvider, ProviderDocument
+from pkb.providers.openai_compatible import ProviderRequestError
 from pkb.topics.model import (
     TopicCandidate,
     TopicEvidence,
@@ -837,57 +838,125 @@ class TopicGenerator:
     ) -> TopicGenerationResult:
         """Bind semantic editorial proposals to concrete, current local Notes."""
 
+        now = _utc(self.clock())
+        cutoff = now - timedelta(days=7)
+        ordered_notes = sorted(notes.items(), key=lambda item: (-_utc(item[1].note.created_at).timestamp(), item[0]))
         documents = []
-        for document_id, loaded in sorted(notes.items()):
+        recent_ids: set[str] = set()
+        facts_by_id: dict[str, str] = {}
+        for document_id, loaded in ordered_notes:
             note = loaded.note
             facts = "\n".join([note.summary, *note.key_points, *note.quotes])
             if len(facts.strip()) < 30:
                 continue
+            facts_by_id[document_id] = note.title + facts[:2200]
+            imported_at = _utc(note.created_at)
+            recent = cutoff <= imported_at <= now
+            if recent:
+                recent_ids.add(document_id)
             documents.append(ProviderDocument(
                 document_id=document_id, title=note.title,
-                content=f"标签：{'、'.join(note.tags)}\n内容：{facts[:2200]}",
+                content=f"导入时间：{imported_at.isoformat()}；最近7天：{'是' if recent else '否'}\n标签：{'、'.join(note.tags)}\n内容：{facts[:2200]}",
             ))
         if not documents:
-            return TopicGenerationResult(status="insufficient_data", candidates=[], message="没有足够内容形成具体选题。")
-        suggestions = provider.generate_topics(tuple(documents), limit=limit)
+            return TopicGenerationResult(status="insufficient_data", candidates=[], message="没有可读取且内容足够的笔记，无法形成有依据的选题。")
         available = {item.document_id: item for item in documents}
         candidates = []
         seen_titles: set[str] = set()
-        seen_sources: set[frozenset[str]] = set()
-        for suggestion in suggestions:
-            focus = suggestion.focus.strip()
-            focus_key = _editorial_key(focus)
-            ids = frozenset(suggestion.source_ids)
-            title = suggestion.title.strip()
-            title_key = _editorial_key(title)
-            if (
-                len(focus_key) < 2 or focus_key in _GENERIC_EDITORIAL_LABELS
-                or not ids or not ids <= available.keys()
-                or not 6 <= len(title) <= 70 or any(mark in title for mark in ("×", " + "))
-                or title_key in seen_titles or ids in seen_sources
-                or any(focus_key not in _editorial_key(available[item].title + available[item].content) for item in ids)
-            ):
+        seen_angles: set[tuple[str, frozenset[str]]] = set()
+        rejected: dict[str, int] = defaultdict(int)
+        target = min(3, limit)
+        attempts = 0
+        for attempt in range(2):
+            attempts += 1
+            request_documents = documents
+            if attempt:
+                feedback = "；".join(f"{reason}（{count}）" for reason, count in rejected.items())
+                accepted = "；".join(f"{item.title}／主线：{item.focus}" for item in candidates) or "无"
+                first = documents[0].model_copy(update={"content": (
+                    "编辑校验反馈（不是来源事实，不得引用）：上一轮合格选题不足，请补充不同具体角度。"
+                    f"已接纳选题：{accepted}。不要重复这些标题或主线。筛选原因：{feedback}。"
+                    "主线须从以下资料内容摘取，source_ids 只使用给定的真实资料 ID。\n\n"
+                    + documents[0].content
+                )})
+                request_documents = [first, *documents[1:]]
+            try:
+                suggestions = provider.generate_topics(tuple(request_documents), limit=limit)
+            except ProviderRequestError as error:
+                reason = "AI 返回的选题结构或字段格式不合格" if (
+                    "JSON" in str(error) or "字段格式" in str(error)
+                ) else "AI 服务调用失败"
+                rejected[reason] += 1
                 continue
-            sources = [_display_source(_note_source(
-                _note_index_entry(notes[item], str(self.notes_dir or "notes")), notes[item],
-            )) for item in sorted(ids)]
-            candidates.append(TopicCandidate(
-                title=title, focus=focus,
-                why_worth_doing=suggestion.rationale or f"围绕“{focus}”解释一个具体问题。",
-                score=round(min(0.95, 0.7 + 0.05 * len(ids)), 3),
-                sources=sources,
-                evidence=[
-                    TopicEvidence(signal="focus", values=[focus], source_ids=sorted(ids), explanation="主线短语在所有支持材料中出现。"),
-                    TopicEvidence(signal="content", values=[source.title for source in sources], source_ids=sorted(ids), explanation="这些资料支持该选题的具体内容。"),
-                ],
-                reasons=[TopicReason(rule="grounded_editorial_topic", matches=[focus], weight=0.7, explanation="具体主线与合法资料 ID 均通过校验。")],
-            ))
-            seen_titles.add(title_key)
-            seen_sources.add(ids)
+            if not suggestions:
+                rejected["AI 未返回候选"] += 1
+            for suggestion in suggestions:
+                focus = suggestion.focus.strip()
+                focus_key = _editorial_key(focus)
+                ids = frozenset(suggestion.source_ids)
+                title = suggestion.title.strip()
+                title_key = _editorial_key(title)
+                reason = None
+                if len(focus_key) < 2 or focus_key in _GENERIC_EDITORIAL_LABELS:
+                    reason = "主线为空或过于宽泛"
+                elif not ids or not ids <= available.keys():
+                    reason = "来源编号为空或不存在"
+                elif not 6 <= len(title) <= 70 or any(mark in title for mark in ("×", " + ")):
+                    reason = "标题长度或拼接格式不合格"
+                if reason:
+                    rejected[reason] += 1
+                    continue
+                # Keep the actual supporting sources, rather than discarding a
+                # valid topic because the model also attached an unrelated Note.
+                supported_ids = frozenset(item for item in ids if focus_key in _editorial_key(facts_by_id[item]))
+                if not supported_ids:
+                    rejected["主线短语未出现在引用资料内容中"] += 1
+                    continue
+                if supported_ids != ids:
+                    rejected["移除不支持主线的附带来源"] += len(ids - supported_ids)
+                ids = supported_ids
+                if title_key in seen_titles or (focus_key, ids) in seen_angles:
+                    rejected["标题或同一主线重复"] += 1
+                    continue
+                sources = [_display_source(_note_source(
+                    _note_index_entry(notes[item], str(self.notes_dir or "notes")), notes[item],
+                )) for item in sorted(ids)]
+                recent_sources = sorted(ids & recent_ids)
+                reasons = [TopicReason(rule="grounded_editorial_topic", matches=[focus], weight=0.7, explanation="具体主线与合法资料 ID 均通过校验。")]
+                if recent_sources:
+                    reasons.append(TopicReason(rule="recent_material", matches=recent_sources, weight=0.1, explanation="优先使用最近 7 天导入的资料；较早资料仍可补充选题。"))
+                candidates.append(TopicCandidate(
+                    title=title, focus=focus,
+                    why_worth_doing=suggestion.rationale or f"围绕“{focus}”解释一个具体问题。",
+                    score=round(min(0.95, 0.7 + 0.05 * len(ids) + (0.1 if recent_sources else 0)), 3),
+                    sources=sources,
+                    evidence=[
+                        TopicEvidence(signal="focus", values=[focus], source_ids=sorted(ids), explanation="主线短语在保留的支持材料内容中出现。"),
+                        TopicEvidence(signal="content", values=[source.title for source in sources], source_ids=sorted(ids), explanation="这些资料支持该选题的具体内容。"),
+                    ],
+                    reasons=reasons,
+                ))
+                seen_titles.add(title_key)
+                seen_angles.add((focus_key, ids))
+            if len(candidates) >= target:
+                break
+        candidates.sort(key=lambda item: (
+            -int(any(source.source_id in recent_ids for source in item.sources)),
+            -max(_utc(notes[source.source_id].note.created_at).timestamp() for source in item.sources),
+        ))
+        selected = candidates[:limit]
+        policy = "优先最近 7 天资料，较早资料补充" if recent_ids else "最近 7 天没有新导入，已使用已有资料"
+        message = f"{policy}；生成 {len(selected)} 个具体选题。"
+        if attempts > 1:
+            message += "首次不足，已补试一次。"
+        if rejected:
+            message += "筛选说明：" + "；".join(f"{reason}（{count}）" for reason, count in rejected.items()) + "。"
+        if len(selected) < target:
+            message += f"仍不足 {target} 个，请依据筛选说明处理；未用无依据的标题凑数。"
         return TopicGenerationResult(
-            status="ok" if len(candidates) >= 3 else "insufficient_data",
-            candidates=candidates[:limit],
-            message=f"根据最新资料生成 {len(candidates[:limit])} 个具体选题；未通过来源或重复校验的候选已排除。",
+            status="ok" if len(selected) >= target else "insufficient_data",
+            candidates=selected,
+            message=message,
         )
 
     def generate(self, *, limit: int = DEFAULT_LIMIT, provider: AIProvider | None = None) -> TopicGenerationResult:

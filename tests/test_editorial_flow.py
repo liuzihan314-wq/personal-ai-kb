@@ -62,7 +62,7 @@ def test_new_note_invalidates_old_confirmation_and_enters_next_topic_request(tmp
     assert state["topics_result"] is None and state["script_result"] is None
     assert state["topic_select"] == "" and not state["topic_selection_confirmed"]
     service.generate_topics()
-    assert provider.seen == [{"voice"}, {"voice", "new"}]
+    assert provider.seen == [{"voice"}, {"voice"}, {"voice", "new"}, {"voice", "new"}]
 
 
 def test_topic_revision_is_scoped_to_the_current_user(tmp_path):
@@ -84,3 +84,115 @@ def test_spoken_copy_typography_does_not_depend_on_model_spacing():
     from pkb.scripts.service import _format_spoken_copy
 
     assert _format_spoken_copy("在worktree里写CLAUDE.md，3步完成——别忘了commit。") == "在 worktree 里写 CLAUDE.md，3 步完成--别忘了 commit。"
+
+
+def _three_editorial_notes(created_at):
+    return [_note(identity, focus + "操作实践", focus).model_copy(update={"created_at": created_at})
+            for identity, focus in (("voice", "参考音频"), ("code", "worktree"), ("text", "提示词"))]
+
+
+def _three_editorial_proposals():
+    return [TopicSuggestion(title=focus + "应该如何准备和使用？", focus=focus, source_ids=[identity])
+            for identity, focus in (("voice", "参考音频"), ("code", "worktree"), ("text", "提示词"))]
+
+
+def test_editorial_old_library_still_generates_three_topics():
+    from datetime import timedelta
+    now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+    notes = _three_editorial_notes(now - timedelta(days=40))
+
+    class CapturingProvider(MockAIProvider):
+        def generate_topics(self, context=(), *, limit=3):
+            assert len(context) == 3
+            assert all("最近7天：否" in item.content for item in context)
+            return _three_editorial_proposals()
+
+    result = TopicGenerator(notes=notes, clock=lambda: now).generate(provider=CapturingProvider())
+    assert result.status == "ok" and len(result.candidates) == 3
+    assert "最近 7 天没有新导入，已使用已有资料" in result.message
+
+
+def test_editorial_recent_sources_rank_first_without_excluding_old_sources():
+    from datetime import timedelta
+    now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+    notes = _three_editorial_notes(now - timedelta(days=40))
+    notes[1] = notes[1].model_copy(update={"created_at": now - timedelta(days=7)})
+
+    class CapturingProvider(MockAIProvider):
+        def generate_topics(self, context=(), *, limit=3):
+            assert context[0].document_id == "code"
+            assert "最近7天：是" in context[0].content
+            assert {item.document_id for item in context} == {"voice", "code", "text"}
+            return _three_editorial_proposals()
+
+    result = TopicGenerator(notes=notes, clock=lambda: now).generate(provider=CapturingProvider())
+    assert len(result.candidates) == 3
+    assert result.candidates[0].focus == "worktree"
+    assert any(item.rule == "recent_material" for item in result.candidates[0].reasons)
+
+
+def test_one_old_note_can_support_three_distinct_angles_and_drop_extra_sources():
+    from datetime import timedelta
+    now = datetime(2026, 10, 9, tzinfo=timezone.utc)
+    note = _note("voice", "声音克隆实践", "参考音频、音色对齐、噪声清理")
+    note = note.model_copy(update={"created_at": now - timedelta(days=40)})
+    other = _note("other", "开发分支管理", "worktree")
+    proposals = [TopicSuggestion(title=focus + "应该注意哪些准备步骤？", focus=focus, source_ids=["voice", "other"])
+                  for focus in ("参考音频", "音色对齐", "噪声清理")]
+    result = TopicGenerator(notes=[note, other], clock=lambda: now).generate(provider=MockAIProvider({"generate_topics": proposals}))
+    assert result.status == "ok" and len(result.candidates) == 3
+    assert all(item.source_ids == ["voice"] for item in result.candidates)
+    assert "移除不支持主线的附带来源" in result.message
+
+
+def test_editorial_retry_contains_diagnostics_and_can_fill_shortlist():
+    class RetryProvider(MockAIProvider):
+        attempts = 0
+        def generate_topics(self, context=(), *, limit=3):
+            self.attempts += 1
+            if self.attempts == 1:
+                return [TopicSuggestion(title="没有依据的主线提议", focus="不存在的主线", source_ids=["voice"])]
+            assert "主线短语未出现在引用资料内容中" in context[0].content
+            return _three_editorial_proposals()
+
+    provider = RetryProvider()
+    result = TopicGenerator(notes=_three_editorial_notes(datetime(2026, 10, 2, tzinfo=timezone.utc))).generate(provider=provider)
+    assert provider.attempts == 2 and len(result.candidates) == 3
+    assert "已补试一次" in result.message
+
+
+def test_editorial_rejection_reasons_are_visible_and_retry_is_bounded():
+    class InvalidProvider(MockAIProvider):
+        attempts = 0
+        def generate_topics(self, context=(), *, limit=3):
+            self.attempts += 1
+            return [TopicSuggestion(title="合成选题的测试标题", focus="参考音频", source_ids=["missing"]),
+                    TopicSuggestion(title="另一个合成测试标题", focus="AI", source_ids=["voice"])]
+
+    provider = InvalidProvider()
+    result = TopicGenerator(notes=_three_editorial_notes(datetime(2026, 10, 2, tzinfo=timezone.utc))).generate(provider=provider)
+    assert provider.attempts == 2 and not result.candidates
+    assert "来源编号为空或不存在（2）" in result.message
+    assert "主线为空或过于宽泛（2）" in result.message
+
+
+def test_editorial_retry_service_error_preserves_accepted_topic():
+    from pkb.providers.openai_compatible import ProviderRequestError
+    class Provider(MockAIProvider):
+        attempts = 0
+        def generate_topics(self, context=(), *, limit=3):
+            self.attempts += 1
+            if self.attempts == 1:
+                return _three_editorial_proposals()[:1]
+            raise ProviderRequestError("AI Provider request failed")
+    result = TopicGenerator(notes=_three_editorial_notes(datetime(2026, 10, 2, tzinfo=timezone.utc))).generate(provider=Provider())
+    assert len(result.candidates) == 1
+    assert "AI 服务调用失败（1）" in result.message
+
+
+def test_empty_editorial_library_never_calls_provider():
+    class Provider(MockAIProvider):
+        def generate_topics(self, *args, **kwargs):
+            raise AssertionError("empty library must not call AI")
+    result = TopicGenerator(notes=[]).generate(provider=Provider())
+    assert not result.candidates and "没有可读取" in result.message
