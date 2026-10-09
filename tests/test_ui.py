@@ -215,17 +215,17 @@ def test_invalid_citations_and_unsafe_pdf_paths_do_not_open_content(tmp_path, mo
         [source, duplicate, unsupported, missing_pdf],
         raw_dir=tmp_path,
     )
-    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
+    assert ui_app._render_requested_source_preview(raw_dir=tmp_path)
     monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "missing-pdf"})
-    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
+    assert ui_app._render_requested_source_preview(raw_dir=tmp_path)
 
     assert calls == [
         "无效（来源 2），冲突（来源 1），不支持（来源 3），"
         "缺失[（来源 4）](?source_preview=missing-pdf)"
     ]
     assert messages == [
-        "该来源的原始 PDF 当前不可用。",
-        "该来源的原始 PDF 当前不可用。",
+        "该来源的原始资料当前不可用。",
+        "该来源的原始资料当前不可用。",
     ]
     traversal = SimpleNamespace(kind="raw", source_id="../outside")
     assert ui_app._source_raw_path(traversal, tmp_path) is None
@@ -250,12 +250,57 @@ def test_answer_pdf_preview_renders_a_synthetic_original_page(tmp_path, monkeypa
     monkeypatch.setattr(ui_app.st, "subheader", headings.append)
     monkeypatch.setattr(ui_app.st, "caption", captions.append)
 
-    assert ui_app._render_requested_pdf_preview(raw_dir=tmp_path)
+    assert ui_app._render_requested_source_preview(raw_dir=tmp_path)
 
     assert len(images) == 2
     assert all(image.startswith(b"\x89PNG\r\n\x1a\n") for image in images)
     assert headings == ["原始 PDF 预览"]
     assert captions == ["共 2 页，向下滚动可查看完整 PDF。", "关闭此标签页即可返回原回答。"]
+
+
+def test_pasted_text_citation_opens_exact_original_preview(tmp_path, monkeypatch):
+    from pkb.qa.model import QASource
+    from pkb.ui import app as ui_app
+
+    original_text = "复制输入的原文。\n\n保留换行与 <标签>，不当作网页执行。"
+    original = tmp_path / "text-1" / "original.txt"
+    original.parent.mkdir()
+    original.write_text(original_text, encoding="utf-8")
+    source = QASource(kind="note", source_id="text-1", citation_id="来源 1", reference="raw:text-1")
+    answers, texts, headings = [], [], []
+    monkeypatch.setattr(ui_app.st, "markdown", lambda body, **_: answers.append(body))
+    monkeypatch.setattr(ui_app.st, "text", texts.append)
+    monkeypatch.setattr(ui_app.st, "subheader", headings.append)
+    monkeypatch.setattr(ui_app.st, "caption", lambda _: None)
+    monkeypatch.setattr(ui_app.st, "query_params", {})
+
+    ui_app._render_cited_answer("回答（来源 1）", [source], raw_dir=tmp_path)
+    assert answers == ["回答[（来源 1）](?source_preview=text-1)"]
+    monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": "text-1"})
+    assert ui_app._render_requested_source_preview(raw_dir=tmp_path)
+    assert headings == ["原始文本预览"]
+    assert texts == [original_text]
+
+
+def test_text_preview_rejects_cross_user_and_symlink_paths(tmp_path, monkeypatch):
+    from pkb.ui import app as ui_app
+
+    current_raw = tmp_path / "current" / "raw"
+    current_raw.mkdir(parents=True)
+    other_raw = tmp_path / "other" / "raw"
+    other_original = other_raw / "text-1" / "original.txt"
+    other_original.parent.mkdir(parents=True)
+    other_original.write_text("other user private text", encoding="utf-8")
+    (current_raw / "linked").symlink_to(other_original.parent, target_is_directory=True)
+    messages, texts = [], []
+    monkeypatch.setattr(ui_app.st, "info", messages.append)
+    monkeypatch.setattr(ui_app.st, "text", texts.append)
+    monkeypatch.setattr(ui_app.st, "caption", lambda _: None)
+    for source_id in ("text-1", "../../other/raw/text-1", "linked"):
+        monkeypatch.setattr(ui_app.st, "query_params", {"source_preview": source_id})
+        assert ui_app._render_requested_source_preview(raw_dir=current_raw)
+    assert not texts
+    assert messages == ["该来源的原始资料当前不可用。"] * 3
 
 
 def _seed_script_library(data_dir: Path) -> TopicCandidate:

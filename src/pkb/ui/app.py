@@ -930,7 +930,7 @@ def _render_cited_answer(answer: str, sources: Sequence[Any], *, raw_dir: Path) 
             isinstance(source_id, str)
             and getattr(source, "reference", None) == f"raw:{source_id}"
         )
-        if (raw_path is not None and raw_path.suffix.lower() == ".pdf") or (
+        if raw_path is not None or (
             raw_path is None and is_raw_reference
         ):
             params = dict(st.query_params)
@@ -974,16 +974,29 @@ def _render_pdf_preview(source: Any, *, raw_dir: Path) -> None:
         document.close()
 
 
-def _render_requested_pdf_preview(*, raw_dir: Path) -> bool:
+def _render_requested_source_preview(*, raw_dir: Path) -> bool:
     """Render a requested original for the authenticated user's Raw directory."""
 
     source_id = st.query_params.get("source_preview")
     if source_id is None:
         return False
     if not isinstance(source_id, str) or not source_id:
-        st.info("该来源的原始 PDF 当前不可用。")
+        st.info("该来源的原始资料当前不可用。")
         return True
-    _render_pdf_preview(QASource(kind="raw", source_id=source_id), raw_dir=raw_dir)
+    source = QASource(kind="raw", source_id=source_id)
+    raw_path = _source_raw_path(source, raw_dir)
+    if raw_path is None:
+        st.info("该来源的原始资料当前不可用。")
+    elif raw_path.suffix.lower() == ".pdf":
+        _render_pdf_preview(source, raw_dir=raw_dir)
+    else:
+        try:
+            original_text = raw_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            st.info("该来源的原始文本当前不可用。")
+        else:
+            st.subheader("原始文本预览")
+            st.text(original_text)
     st.caption("关闭此标签页即可返回原回答。")
     return True
 
@@ -1518,7 +1531,7 @@ def main(service: UIService | None = None) -> None:
         invite_api_mode=invite_api_mode,
     )
     active_service = default_service if service is not None else _service_for_current_session(default_service)
-    if _render_requested_pdf_preview(raw_dir=active_service.paths.raw_dir):
+    if _render_requested_source_preview(raw_dir=active_service.paths.raw_dir):
         return
     _render_brand_header()
     _render_flow_overview()

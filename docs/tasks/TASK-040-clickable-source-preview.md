@@ -40,4 +40,8 @@ TASK-038 added per-answer citation IDs and invalid-reference marking. The source
 
 ## Completion report
 
+### Text-source follow-up
+
+2026-10-09 21:26：补齐直接粘贴文本来源的正文引用链接，复用当前用户的安全 Raw 定位与预览路由，按文件类型展示 PDF 或原始纯文本。改动限定于 UI、测试及说明文档；不修改用户资料、认证、检索或依赖。全量 227 项通过，包括纯文本精确保留、跨用户／路径穿越／符号链接拒绝与原有 PDF 预览。主人当前回答实际点击“来源 1”打开对应原文；启动器重启后复验成功。主工作区 main，提交前 HEAD `316d071`；最终修复提交见本文件的 Git 历史。本地截图：`output/TASK-040-text-source-preview.jpg`。
+
 Return TASK, STATUS, changes, modified files, tests and outcomes, unresolved issues, risks, branch, worktree, commit, and acceptance steps. Commit on the assigned task branch before requesting MAIN review.

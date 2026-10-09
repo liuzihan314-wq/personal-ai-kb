@@ -1034,6 +1034,8 @@ Acceptance record: 2026-10-02 00:18 MAIN 验收通过。按索引内语料频率
 
 ## TASK-040 — Clickable Q&A Sources and PDF Preview
 
+2026-10-09 21:26 补齐粘贴文本的问答来源跳转。根因是正文链接只允许网页与 PDF，已有 `original.txt` 被排除。现在同一预览入口按原始文件类型展示 PDF 或纯文本，不改检索、认证、原始数据和依赖。定向回归新增文本原样显示、跨用户、路径穿越及符号链接拒绝检查；全量 227 passed，5 条既有 SWIG 警告，`git diff --check` 通过。实际点击主人当前回答的“来源 1”，新标签页显示对应 Idea Card 原始全文；启动器重启后再次读取成功。实例为 main、HEAD `316d071` 加本次局部修改、PID 89675、127.0.0.1:8501、cwd 与源码入口均为主项目，版本指纹匹配。截图 `output/TASK-040-text-source-preview.jpg` 仅本地保存；未调用 AI、未上传资料。源码、内容、文本格式、安全和 PDF 回归通过，依赖无变化，打包／安装不适用。无新增任务临时目录；既有 `.tmp/`、测试缓存与临时样本保留，未删除。
+
 Status: DONE
 Dependencies: TASK-038
 Owner: MAIN + TASK-040 Worker
