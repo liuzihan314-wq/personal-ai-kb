@@ -34,6 +34,7 @@
 - 邀请码 API 策略必须按记录区分：`shared` 使用服务器主人配置，`byok` 必须使用访客在当前网页会话填写的配置，不能在 `byok` 模式回退到主人 `.env`；访客 API 密钥不得写入项目文件、邀请码文件、日志或 Git。
 - 文件名使用英文，文本使用 UTF-8；报告使用 TASK-ID-description.md。按需建目录，不提前创建空实现模块。
 - 清理临时文件、删除文件和目录前必须获得用户明确确认。
+- `scripts/cloud_backup.py` 是 Mac 单向 HTTPS 备份入口；云端 `pkb.cloud_app` 使用官方 `st.App` 挂载密钥保护的只读备份路由。只备份活动根目录的 Raw／Notes／Knowledge／Index／History，不导出环境配置、凭据或其他云端目录。校验成功快照保存在 `data/cloud-backup/<timestamp>/`，不参与本地检索且排除出 Git；状态位于 `runtime/cloud-backup/`，中间文件位于 `.tmp/cloud-backup/`。不覆盖原资料、不自动删除快照，正式恢复另行确认。专用密钥仅存 Mac 用户凭据目录与 Railway 私密变量，不进入代码、Git 或日志；备份不依赖 Codex、CLI 登录或 SSH 通道。
 
 ## Safety and Git
 

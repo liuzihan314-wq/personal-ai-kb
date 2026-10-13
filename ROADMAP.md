@@ -22,6 +22,14 @@ Status：进行中，基础部署、持久磁盘重启、已有资料迁移检�
 - 施工与迁移多维结果：`output/TASK-045-railway-trial-preparation.md`；本地文件、修复源码与进度文档已保存并提交／同步 GitHub，云端运行已验证的修复提交。下一步用真实新增内容验证另一浏览器可检索及实际手机访问；不实现 Mac 本地文件夹同步。账号额度与费用仍待核对。
 - 本次中间目录 `.tmp/railway-trial/`、`.tmp/railway-migration/`、云端旧目录与部分上传目录保留待确认清理；Mac 现有资料保留，迁移检索通过，完整 AI 功能未验收，TASK 不能标记 DONE。
 
+### TASK-046｜云端资料自动备份到 Mac
+
+Status：DONE。Owner：当前主线程；无额外 Worker。Thread：当前聊天。Dependencies：TASK-045 活动云端资料及备份凭据有效。施工与验收：[Goal](goals/20261013-1512-cloud-backup.md)。
+
+- 2026-10-13 17:08：按主人最新要求改为每天 20:00，登录补检查，同日成功不重复连接。用户 LaunchAgent 已加载并实际运行，退出码 0；未来日历触发未跨日观察。真实 HTTPS 快照从 114 个文件追加到 117 个文件、38,649,473 字节，重复检查 unchanged；全部 SHA-256 校验通过。独立恢复演练重建 27 条 Note／Index，44 份原始文件含 15 份 PDF 哈希保持，两组关键词查询均返回 10 条候选，未改动原 Mac 活动资料。263 项测试通过，只有 5 条既有 SWIG 警告。
+- 2026-10-13 17:08：经主人确认，SSH/SFTP 网络阻塞后改用同域 HTTPS 专用只读接口与独立密钥；Streamlit 官方 st.App 服务部署成功（源码 bb6af45，部署 f99e046b-44d9-4d04-8d4e-f92874118440），健康 ok，无认证备份请求 401。原网页地址、业务资料和 AI 配置保留。开发分支 codex/cloud-backup，隔离目录 .worktrees/cloud-backup；本机快照、凭据、输出报告均排除 Git，代码及操作文档按本次授权同步。
+- 交付：`docs/cloud-backup.md`、`output/TASK-046-ai-coding-lessons.md`、`output/TASK-046-runtime-guide.md`、`output/TASK-046-directory-review.md`。正式整合原本机资料与清理临时文件不在本次执行范围；保留 .tmp/cloud-backup、开发 worktree 和全部快照。
+
 ### 当前临时手机访问尝试
 
 - 2026-10-12 16:35：主人确认临时切换 Clash 全局模式并在测试后恢复。通过现有 Unix 控制接口记录 `rule` 原模式，临时 PATCH 为 `global`，使用原 GLOBAL 节点测试新的 Quick Tunnel；24 秒连接观察未出现注册成功，路由记录确认 7844 流量经过当前台湾中转节点。已恢复 `rule` 并停止本次 Tunnel；本地网页健康检查仍为 `ok`。本轮没有修改节点选择、持久代理配置或知识库数据；不能确认是节点出口还是其他网络层原因，手机访问继续待连通。补充保留项为 `.tmp/mobile-cloudflare/original-proxy-mode.json`、`runtime/logs/mobile-global-tunnel-20261012.log` 和 `runtime/mobile-global-tunnel-20261012.pid`。
