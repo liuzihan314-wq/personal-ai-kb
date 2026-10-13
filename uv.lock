@@ -715,7 +715,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.13,<3" },
     { name = "pymupdf", specifier = ">=1.24,<2" },
-    { name = "streamlit", specifier = ">=1.39,<2" },
+    { name = "streamlit", specifier = ">=1.63,<2" },
     { name = "typer", specifier = ">=0.16,<1" },
 ]
 
