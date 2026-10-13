@@ -180,12 +180,30 @@ def backup(project=None, base_url=BASE_URL, key_file=KEY_FILE):
             return 1
 
 
+def scheduled_backup(project=None):
+    """Check once per successful local calendar day; manual runs bypass this."""
+    project = Path(project or PROJECT)
+    path = project / "runtime/cloud-backup/status.json"
+    try:
+        prior = json.loads(path.read_text())
+        checked = datetime.fromisoformat(prior["last_check"]).astimezone().date()
+        if (prior.get("status") in {"success", "unchanged"}
+                and checked == datetime.now().astimezone().date()
+                and local_snapshot_valid(Path(prior["snapshot"]), prior["fingerprint"])):
+            print("Today's backup check already completed; local snapshot verified.")
+            return 0
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return backup(project=project)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Download verified HTTPS knowledge snapshots.")
     parser.add_argument("--status", action="store_true")
+    parser.add_argument("--scheduled", action="store_true")
     args = parser.parse_args()
     if args.status:
         path = PROJECT / "runtime/cloud-backup/status.json"
         print(path.read_text(encoding="utf-8") if path.exists() else "No backup has run yet.")
         return 0
-    return backup()
+    return scheduled_backup() if args.scheduled else backup()

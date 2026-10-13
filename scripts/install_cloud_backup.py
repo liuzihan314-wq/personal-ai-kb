@@ -15,10 +15,10 @@ def main():
     log_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "Label": "com.personal-ai-kb.cloud-backup",
-        "ProgramArguments": [str(PROJECT / ".venv/bin/python"), str(PROJECT / "scripts/cloud_backup.py")],
+        "ProgramArguments": [str(PROJECT / ".venv/bin/python"), str(PROJECT / "scripts/cloud_backup.py"), "--scheduled"],
         "WorkingDirectory": str(PROJECT),
         "RunAtLoad": True,
-        "StartInterval": 3600,
+        "StartCalendarInterval": {"Hour": 20, "Minute": 0},
         "StandardOutPath": str(log_dir / "schedule.log"),
         "StandardErrorPath": str(log_dir / "schedule-error.log"),
         "ProcessType": "Background",
@@ -35,7 +35,7 @@ def main():
         plistlib.dump(payload, stream)
     target.chmod(0o600)
     subprocess.run(["/bin/launchctl", "bootstrap", "gui/" + str(os.getuid()), str(target)], check=True)
-    print("Hourly cloud-backup task installed.")
+    print("Daily cloud-backup task installed (20:00 local time).")
 
 
 if __name__ == "__main__":
