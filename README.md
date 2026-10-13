@@ -231,6 +231,8 @@ cp .env.example .env
 
 `PKB_EMBEDDING_MODEL`、`PKB_EMBEDDING_BASE_URL` 和 `PKB_EMBEDDING_API_KEY` 必须一起配置，Streamlit UI 才会启用 Embedding 语义召回；三项留空时使用 V1 的直接检索。直接检索依赖标题、标签、关键词、Topic、Related 和 JSON Index，不需要 Vector DB。
 
+向量请求遇到响应中断、超时或连接错误时，自动重试一次；仍失败时，网页明确提示并改用关键词检索。HTTP 拒绝或响应格式错误不重试，错误提示不包含服务返回的原始正文。
+
 配置后的预期结果是：页面可以生成真实 Notes、主题综合、问答和口播，并显示来源链。若返回 HTTP 错误，依次检查 endpoint 是否兼容、模型名是否有效、密钥和账户额度是否正常；不要把 API Key 粘贴进 issue、日志或 Git diff。
 
 需要注意的隐私边界：`Raw` 在本机保存，但配置真实 Provider 后，导入资料会发送到该 Provider 以生成 Notes，问答和口播也会发送当前检索出的上下文。请只处理自己有权使用的资料，并单独评估所选服务商的数据政策；未配置 Provider 时，页面不会把 Mock Provider 的测试文本当作真实回答。

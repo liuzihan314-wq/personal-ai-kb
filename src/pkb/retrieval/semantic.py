@@ -8,6 +8,7 @@ vector database is required. Offline tests inject fixed vectors.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from http.client import HTTPException
 import json
 import math
 import os
@@ -85,23 +86,27 @@ class DashScopeEmbeddingClient:
             headers=dict(headers),
             method="POST",
         )
-        try:
-            ssl_context = ssl.create_default_context(
-                cafile=certifi.where() if certifi is not None else None,
-            )
-            with urlopen(  # noqa: S310
-                request,
-                timeout=self.timeout_seconds,
-                context=ssl_context,
-            ) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:500]
-            raise EmbeddingRequestError(
-                f"Embedding service returned HTTP {exc.code}: {detail}"
-            ) from exc
-        except (URLError, TimeoutError, UnicodeError, json.JSONDecodeError) as exc:
-            raise EmbeddingRequestError("Embedding service request failed") from exc
+        ssl_context = ssl.create_default_context(
+            cafile=certifi.where() if certifi is not None else None,
+        )
+        for attempt in range(2):
+            try:
+                with urlopen(  # noqa: S310
+                    request,
+                    timeout=self.timeout_seconds,
+                    context=ssl_context,
+                ) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                break
+            except HTTPError as exc:
+                raise EmbeddingRequestError(
+                    f"Embedding service returned HTTP {exc.code}"
+                ) from exc
+            except (HTTPException, URLError, TimeoutError, ConnectionError) as exc:
+                if attempt == 1:
+                    raise EmbeddingRequestError("Embedding service request failed") from exc
+            except (UnicodeError, json.JSONDecodeError) as exc:
+                raise EmbeddingRequestError("Embedding service request failed") from exc
         if not isinstance(payload, Mapping):
             raise EmbeddingRequestError("Embedding service returned a non-object response")
         return payload

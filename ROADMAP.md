@@ -8,6 +8,29 @@
 
 把 PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md 转为可执行任务。
 
+### TASK-045｜Railway 免费试跑
+
+- 2026-10-13 14:21：修复向量响应中断未转换为 `EmbeddingRequestError` 的问题，对中断／超时／连接错误有限重试一次，两次失败时进入现有关键词回退；HTTP 拒绝与格式错误不重试，移除原始 HTTP 错误正文。云端单条及 20 条合成文本调用成功；通过独立诊断进程临时加载修复，真实“AI视频”“AI提示词”均返回 3 条候选且具有语义评分。隔离本机配置的全量测试 238 passed（5 条既有 SWIG 警告）；首次未隔离测试误载本机配置并暴露认证字段，已告知主人撤销该本机向量密钥。文件已保存，正在同步和部署，最终网页回归待验收。临时诊断文件在 `.tmp/railway-embedding/`，未改用户资料／密钥配置。
+
+Status：进行中，基础部署、持久磁盘重启、已有资料迁移检索和云端 AI／语义检索配置部署通过；新内容 AI 导入及手机／Mac 新增互见闭环待用真实资料验收。Owner：当前聊天的 MAIN，无额外 Worker／Thread。Dependencies：现有 `main` 应用；Railway 可用免费额度。
+
+- 2026-10-12 20:06：Railway 官方连接已接通，主人确认使用当前 GitHub 仓库。测试项目 `personal-ai-kb-trial`／环境 `trial` 已创建；远端 main 与本地 `111da57` 一致，云端固定该提交。单服务位于新加坡，1 vCPU／500 MB 内存上限，空闲休眠开启，持久卷 500 MB 挂载 `/data`。首次 Linux 构建与部署 SUCCESS，公网健康检查 `ok`，实际浏览器已显示应用；网址 `https://knowledge-base-trial-trial.up.railway.app`。未配置密钥或复制私人资料，未选择付费套餐；账号剩余额度尚未通过工具核实。
+- 2026-10-12 20:12：独立合成中文测试文件在重启前输出 CREATED、重启后输出 PRESENT，SHA-256 完全一致，持久磁盘重启验收通过。已移除启动探针配置并完成最终普通启动部署 `f52dd642-8b67-49cf-95fa-af46ecd17597`，状态 SUCCESS；公网与 Mac 本地健康检查均为 `ok`，浏览器网页正常显示，截图 `output/TASK-045-railway-trial.jpg`。实际提交测试观点时，AI 笔记阶段提示 Provider 未配置，不能认定完整内容闭环通过；真实手机和账户费用待主人核对。云端仍为空白／合成测试空间，不是 Mac 已有资料的共享副本。
+- 本地已准备一个白名单源码样例包 `output/railway-trial-source.tar.gz`：65 个原始文件哈希相同，共 68 个归档成员；Python 语法与归档清单核对通过。配置使用 Railpack／uv／现有锁文件，健康入口为 `/_stcore/health`。完整 JSON Schema 请求返回 HTTP 403，Schema 校验和 Linux 云端构建仍待验收。
+- 2026-10-12 22:17：主人已批准复制 Raw／Notes／Knowledge／Index、保留 Mac 原件、继续免登录，且手机与 Mac 都使用同一云端网页；另已批准迁移专用 SSH 密钥新建与公钥登记，官方 CLI 已登录。最终将 Mac 的 100 个业务文件（排除 1 个 `.DS_Store`）与旧云端的 2 个 Raw 文件合并，共 102 个文件、38,615,205 字节；原始正文／PDF、Note 正文与 Knowledge 保持，Raw 路径元数据、Note 原文路径及 Index 路径适配 `/data/pkb-shared-20261012`。云端回读 SHA-256 与本地目标逐文件一致，Mac 原文件哈希未变。目录切换部署 `58aa2aa6-895b-4b00-9f2b-eee1d38d3dbc` SUCCESS、公网健康 `ok`，实际运行根目录匹配、26 条 Note 和 28 条 Raw 的来源路径全部有效；真实网页“ai 视频制作”检索 10 条候选，截图 `output/TASK-045-cloud-migration-search.jpg`。未上传 `.env`、邀请码、history、users、缓存或日志；未配置 API 密钥，真实新内容 AI 全链路和手机新增互见仍待验收。首次目录上传超时，部分副本 `/data/pkb-shared` 未启用；旧 `/data/pkb` 和部分副本均保留，未覆盖或删除。
+- 2026-10-13 14:00：主人已在 Railway 私密变量中填写 DeepSeek 和 Alibaba Model Studio 向量接口的密钥及地址；仅核对变量名称，未读取或记录任何密钥。三项回答变量与三项向量变量均存在，配置部署 SUCCESS，公网健康检查返回 `ok`。语义检索已具备启用条件；尚未自动调用用户付费接口写入测试资料，手机／Mac 的真实新增资料互见闭环仍待主人用一条真实输入验收。
+- 施工与多维结果：`output/TASK-045-railway-trial-preparation.md`；本地文档已保存，本地 Git 未提交，GitHub 未同步本轮文档。部署源码来自已同步的基线仓库；下一步由主人在 Railway 私密变量配置 Provider 后，用真实新增内容验证另一浏览器可检索及实际手机访问；不实现 Mac 本地文件夹同步。账号额度与费用仍待核对。
+- 本次中间目录 `.tmp/railway-trial/`、`.tmp/railway-migration/`、云端旧目录与部分上传目录保留待确认清理；Mac 现有资料保留，迁移检索通过，完整 AI 功能未验收，TASK 不能标记 DONE。
+
+### 当前临时手机访问尝试
+
+- 2026-10-12 16:35：主人确认临时切换 Clash 全局模式并在测试后恢复。通过现有 Unix 控制接口记录 `rule` 原模式，临时 PATCH 为 `global`，使用原 GLOBAL 节点测试新的 Quick Tunnel；24 秒连接观察未出现注册成功，路由记录确认 7844 流量经过当前台湾中转节点。已恢复 `rule` 并停止本次 Tunnel；本地网页健康检查仍为 `ok`。本轮没有修改节点选择、持久代理配置或知识库数据；不能确认是节点出口还是其他网络层原因，手机访问继续待连通。补充保留项为 `.tmp/mobile-cloudflare/original-proxy-mode.json`、`runtime/logs/mobile-global-tunnel-20261012.log` 和 `runtime/mobile-global-tunnel-20261012.pid`。
+- 2026-10-12 16:25：主人明确要求手机与 Mac 共用已有知识库，并在说明“任何拿到链接的人都能查看、新增资料和使用主人 AI 服务”后确认本次临时入口完全免登录。这是本次会话授权的临时访问范围，不改变长期邀请码部署路线。
+- 状态：待连通；没有可交付的手机访问链接。Mac 主项目 `main`、HEAD `111da57`；启动指纹不一致后，通过已有启动器重启服务。后续复查发现服务退出，已用独立后台会话重新运行同一启动器；当前 PID `9911`，监听 `127.0.0.1:8501`，本地健康检查返回 `ok`。
+- 验证：已安装 `cloudflared 2026.9.3`；Quick Tunnel 分配网址，但公网健康请求返回 HTTP 530／Cloudflare 1033，Tunnel 的 HTTP/2 TLS 连接返回 EOF。当前 DNS 将 Tunnel 域名解析为 `198.18.*` 虚拟地址；Clash Verge 正在运行。官方边缘 IP 的直接 TLS 探测超时，现有 SOCKS 代理返回连接成功，但仅用于本次的本机 TCP 转接仍无法完成 Tunnel TLS。未确认具体 Clash 路由原因，不宣称手机功能通过。
+- 本次失败的 Tunnel 和转接进程已停止；Mac 知识库保留运行。未修改应用源码、真实 `.env`、邀请码或用户资料；没有迁移、复制或新增知识库内容，未提交、未推送。下一步核对代理路由或更换网络后再验证公网健康、网页会话及手机新增内容回显。
+- 保留清理清单：`.tmp/mobile-cloudflare/` 为本次临时转接源码；`runtime/logs/mobile-quick-tunnel-20261012.log`、`runtime/logs/mobile-quick-tunnel-relay-20261012.log`、`runtime/logs/mobile-edge-relay-20261012.log` 为诊断日志；对应的 `runtime/mobile-*-20261012.pid` 为已停止进程的记录。未经主人确认不删除。
+
 原则：
 
 - 小步开发

@@ -1,3 +1,6 @@
+from http.client import IncompleteRead
+
+import pytest
 from typer.testing import CliRunner
 
 from pkb.cli.main import app
@@ -21,6 +24,64 @@ from pkb.retrieval import (
 
 
 runner = CliRunner()
+
+
+def test_embedding_interrupted_response_is_reported_as_service_failure(monkeypatch):
+    from pkb.retrieval import EmbeddingRequestError
+    from pkb.retrieval import semantic
+
+    calls = []
+
+    class InterruptedResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            calls.append(1)
+            raise IncompleteRead(b'partial response')
+
+    monkeypatch.setattr(semantic, 'urlopen', lambda *_args, **_kwargs: InterruptedResponse())
+    client = DashScopeEmbeddingClient(
+        base_url='https://example.test/v1',
+        api_key='unit-test-key',
+    )
+
+    with pytest.raises(EmbeddingRequestError, match='request failed') as error:
+        client.embed(['AI 视频'])
+    assert isinstance(error.value.__cause__, IncompleteRead)
+    assert len(calls) == 2
+
+
+def test_embedding_interrupted_response_retries_once_and_recovers(monkeypatch):
+    from pkb.retrieval import semantic
+
+    calls = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            if len(calls) == 1:
+                raise IncompleteRead(b"partial response")
+            return b'{"data":[{"index":0,"embedding":[1.0,0.0]}]}'
+
+    def open_response(*_args, **_kwargs):
+        calls.append(1)
+        return Response()
+
+    monkeypatch.setattr(semantic, "urlopen", open_response)
+    client = DashScopeEmbeddingClient(
+        base_url="https://example.test/v1", api_key="unit-test-key"
+    )
+    assert client.embed(["AI 视频"]) == [(1.0, 0.0)]
+    assert len(calls) == 2
 
 
 class _FakeEmbeddingClient:
