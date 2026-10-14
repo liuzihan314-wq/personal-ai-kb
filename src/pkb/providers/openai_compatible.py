@@ -2,6 +2,7 @@
 
 import json
 import logging
+from http.client import HTTPException
 from collections.abc import Callable, Mapping, Sequence
 import ssl
 from typing import Any
@@ -60,7 +61,7 @@ class OpenAICompatibleProvider:
         model: str,
         base_url: str,
         api_key: str,
-        timeout_seconds: float = 60.0,
+        timeout_seconds: float = 120.0,
         transport: Transport | None = None,
     ) -> None:
         self.model = model.strip()
@@ -97,10 +98,11 @@ class OpenAICompatibleProvider:
             ) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:500]
-            raise ProviderRequestError(f"AI Provider returned HTTP {exc.code}: {detail}") from exc
-        except (URLError, TimeoutError, UnicodeError, json.JSONDecodeError) as exc:
-            raise ProviderRequestError("AI Provider request failed") from exc
+            raise ProviderRequestError(f"AI 服务请求失败（HTTP {exc.code}），请检查模型配置、余额或权限。") from None
+        except (URLError, TimeoutError, HTTPException, OSError) as exc:
+            raise ProviderRequestError("AI 服务连接中断或超时，请重试。") from None
+        except (UnicodeError, json.JSONDecodeError):
+            raise ProviderRequestError("AI 服务返回的数据格式无效。") from None
         if not isinstance(payload, Mapping):
             raise ProviderRequestError("AI Provider returned a non-object response")
         return payload
@@ -117,6 +119,8 @@ class OpenAICompatibleProvider:
         }
         if json_object:
             body["response_format"] = {"type": "json_object"}
+        if urlparse(self.base_url).hostname == "api.deepseek.com":
+            body["thinking"] = {"type": "disabled"}
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -162,7 +166,7 @@ class OpenAICompatibleProvider:
     def extract_key_points(self, document: DocumentInput) -> list[str]:
         item = _document(document)
         values = self._json_list(
-            "你是中文知识库编辑。只基于给定文本，返回 3 到 5 条关键点。只输出 JSON 字符串数组。",
+            "你是中文知识库编辑。阅读全文，覆盖每个有实质内容的章节，不遗漏工具、路线和适用条件。返回 6 到 18 条关键点；短文可少于 6 条。只输出 JSON 字符串数组。",
             f"标题：{item.title or ''}\n\n文本：\n{item.content}",
             allow_fence=True,
         )

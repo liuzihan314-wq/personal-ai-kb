@@ -9,7 +9,7 @@ from pkb.config import get_settings
 from pkb.models import UnifiedDocument
 from pkb.notes.model import Note
 from pkb.notes.storage import NoteRecord, NoteStorage
-from pkb.providers import AIProvider, MockAIProvider, ProviderDocument
+from pkb.providers import AIProvider, ProviderDocument, configured_provider
 
 
 class NoteGenerationError(ValueError):
@@ -61,7 +61,7 @@ class NoteService:
     ) -> None:
         if note_storage is not None and notes_dir is not None:
             raise ValueError("Pass note_storage or notes_dir, not both")
-        self.provider = provider if provider is not None else MockAIProvider()
+        self.provider = provider if provider is not None else configured_provider()
         self.note_storage = note_storage or NoteStorage(
             notes_dir if notes_dir is not None else get_settings().notes_dir
         )

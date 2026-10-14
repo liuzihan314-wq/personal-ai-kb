@@ -507,6 +507,7 @@ class RetrievalService:
         index_path: str | Path | IndexFile | None = None,
         *,
         index: IndexFile | None = None,
+        raw_dir: str | Path | None = None,
     ) -> None:
         if index_path is not None and index is not None:
             raise ValueError("provide either index_path or index, not both")
@@ -519,6 +520,7 @@ class RetrievalService:
             raise ValueError("index_path or index is required")
         self.index_path = Path(index_path) if index_path is not None else None
         self._index = index
+        self.raw_dir = Path(raw_dir) if raw_dir is not None else None
 
     def _load(self) -> IndexFile:
         if self._index is not None:
@@ -535,12 +537,43 @@ class RetrievalService:
     ) -> RetrievalResult:
         """Search the configured Index."""
 
-        return retrieve_from_index(
-            self._load(),
+        index = self._load()
+        result = retrieve_from_index(
+            index,
             query,
-            limit=limit,
+            limit=None if self.raw_dir is not None else limit,
             embedding_client=embedding_client,
         )
+        if self.raw_dir is None:
+            return result
+        from pkb.retrieval.raw import read_source, source_passages
+        from pkb.retrieval.model import RetrievalEvidence, RetrievalReason
+        candidates = {candidate.document_id: candidate for candidate in result.candidates}
+        for entry in index.entries:
+            text = read_source(self.raw_dir, entry.document_id)
+            passage, matches = source_passages(text, query)
+            if not passage:
+                continue
+            raw_score = min(0.9, 0.45 + 0.06 * len(matches))
+            reason = RetrievalReason(field="raw", matches=matches, score=raw_score,
+                                     explanation="原文相关段落匹配；摘要之外的细节也可检索。")
+            prior = candidates.get(entry.document_id)
+            if prior is not None:
+                candidates[entry.document_id] = prior.model_copy(update={
+                    "score": max(prior.score, raw_score),
+                    "evidence": prior.evidence.model_copy(update={"raw": matches}),
+                    "reasons": [*prior.reasons, reason],
+                })
+            else:
+                candidates[entry.document_id] = RetrievalCandidate(
+                    document_id=entry.document_id, raw_document_id=entry.document_id,
+                    title=entry.title, note_path=entry.note_path, score=raw_score,
+                    evidence=RetrievalEvidence(raw=matches), reasons=[reason],
+                )
+        ranked = sorted(candidates.values(), key=lambda item: (-item.score, item.document_id))
+        if limit is not None:
+            ranked = ranked[:limit]
+        return RetrievalResult(query=query, status="ok" if ranked else "no_hits", candidates=ranked)
 
     def retrieve(
         self,

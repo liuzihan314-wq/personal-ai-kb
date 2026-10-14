@@ -332,7 +332,7 @@ class UIService:
     ) -> RetrievalResult:
         """Search the current local Index."""
 
-        return RetrievalService(self.paths.index_path).search(
+        return RetrievalService(self.paths.index_path, raw_dir=self.paths.raw_dir).search(
             query,
             limit=limit,
             embedding_client=self.embedding_client if include_embeddings else None,

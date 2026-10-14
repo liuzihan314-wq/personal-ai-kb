@@ -1164,18 +1164,18 @@ def _render_search_qa_tab(service: UIService) -> None:
                 use_container_width=True,
             )
         if submitted:
+            st.session_state["qa_result"] = None
             try:
-                st.session_state["qa_result"] = service.answer(
-                    question,
-                    limit=int(qa_limit),
-                )
-            except EmbeddingRequestError:
-                st.warning("语义检索服务暂时不可用，已使用本地关键词检索生成回答。")
-                st.session_state["qa_result"] = service.answer(
-                    question,
-                    limit=int(qa_limit),
-                    include_embeddings=False,
-                )
+                if not question.strip():
+                    st.warning("请先输入问题，再生成回答。")
+                else:
+                    try:
+                        st.session_state["qa_result"] = service.answer(question, limit=int(qa_limit))
+                    except EmbeddingRequestError:
+                        st.warning("语义检索服务暂时不可用，已使用本地关键词检索。")
+                        st.session_state["qa_result"] = service.answer(
+                            question, limit=int(qa_limit), include_embeddings=False,
+                        )
             except Exception as error:
                 _show_error(error)
     _render_retrieval(st.session_state["search_result"], heading="检索结果")

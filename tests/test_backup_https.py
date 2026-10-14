@@ -51,7 +51,7 @@ def request(app, path, token=None, method="GET"):
     return asyncio.run(run())
 
 
-@pytest.mark.parametrize("path", ["/api/backup/manifest", "/api/backup/snapshot"])
+@pytest.mark.parametrize("path", ["/api/backup/manifest", "/api/backup/snapshot", "/api/backup/rebuild-status"])
 @pytest.mark.parametrize("token", [None, "wrong-key"])
 def test_unauthorized_backup_never_returns_private_data(tmp_path, path, token):
     root = sample_root(tmp_path)

@@ -12,6 +12,7 @@ RetrievalField = Literal[
     "topic",
     "semantic",
     "related",
+    "raw",
 ]
 RetrievalStatus = Literal["ok", "no_hits"]
 
@@ -27,6 +28,7 @@ class RetrievalEvidence(BaseModel):
     topic: list[str] = Field(default_factory=list)
     semantic: list[str] = Field(default_factory=list)
     related: list[str] = Field(default_factory=list)
+    raw: list[str] = Field(default_factory=list)
 
     @property
     def matched_fields(self) -> tuple[str, ...]:
@@ -34,7 +36,7 @@ class RetrievalEvidence(BaseModel):
 
         return tuple(
             field
-            for field in ("title", "tags", "keywords", "topic", "semantic", "related")
+            for field in ("title", "tags", "keywords", "topic", "semantic", "related", "raw")
             if getattr(self, field)
         )
 

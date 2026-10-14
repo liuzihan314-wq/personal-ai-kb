@@ -168,7 +168,7 @@ def test_five_synthetic_pdf_and_idea_documents_generate_notes(tmp_path):
     ]
 
     for document in documents:
-        result = NoteService(notes_dir=notes_dir, clock=lambda: FIXED_TIME).generate(document)
+        result = NoteService(provider=MockAIProvider(), notes_dir=notes_dir, clock=lambda: FIXED_TIME).generate(document)
         assert result.path.is_file()
         assert result.note.document_id == document.id
         assert result.note.summary
@@ -177,6 +177,7 @@ def test_five_synthetic_pdf_and_idea_documents_generate_notes(tmp_path):
 
 
 def test_cli_generate_note_reads_raw_and_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setattr("pkb.notes.service.configured_provider", lambda: MockAIProvider())
     data_dir = tmp_path / "data"
     monkeypatch.setenv("PKB_DATA_DIR", str(data_dir))
     document = IdeaCardImporter(raw_dir=data_dir / "raw").create(

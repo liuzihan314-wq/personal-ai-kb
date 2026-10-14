@@ -419,6 +419,13 @@ class QAService:
 
     def _load_raw(self, resolved: _ResolvedNote) -> _RawMaterial | None:
         document_id = resolved.raw_document_id
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", document_id):
+            return None
+        directory = self.raw_storage.raw_dir / document_id
+        if directory.is_symlink() or not directory.resolve().is_relative_to(self.raw_storage.raw_dir.resolve()):
+            return None
+        if any(path.is_symlink() for path in directory.glob("*")):
+            return None
         try:
             if not self.raw_storage.has_document(document_id):
                 return None
@@ -600,7 +607,7 @@ class QAService:
             )
 
         index = self._load_index()
-        retrieval = RetrievalService(index).search(
+        retrieval = RetrievalService(index, raw_dir=self.raw_storage.raw_dir).search(
             question,
             limit=limit,
             embedding_client=self.embedding_client,
@@ -659,11 +666,16 @@ class QAService:
 
         raw_materials: list[_RawMaterial] = []
         for resolved in resolved_notes:
-            if resolved.note is not None:
-                continue
             material = self._load_raw(resolved)
             if material is not None:
-                raw_materials.append(material)
+                from pkb.retrieval.raw import source_passages
+                passage, _ = source_passages(material.content, question)
+                if passage or resolved.note is None:
+                    raw_materials.append(_RawMaterial(
+                        document_id=material.document_id, title=material.title,
+                        content=passage or material.content[:3000],
+                        original_path=material.original_path, extracted_path=material.extracted_path,
+                    ))
 
         source_map: dict[tuple[str, str], QASource] = {}
         evidence: list[QAEvidence] = []
@@ -773,7 +785,9 @@ class QAService:
                 evidence=evidence,
             )
         except Exception as exc:
-            raise QAProviderError("Provider could not answer from local evidence") from exc
+            from pkb.providers.openai_compatible import ProviderRequestError
+            message = str(exc) if isinstance(exc, ProviderRequestError) else "AI 回答请求失败，请重试；本次没有生成回答。"
+            raise QAProviderError(message) from None
         if not isinstance(answer, str) or not answer.strip():
             raise QAProviderError("Provider returned an empty or invalid answer")
 

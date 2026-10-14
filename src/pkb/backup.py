@@ -140,5 +140,15 @@ def routes(root=None, token=None):
         return StreamingResponse(chunks(), media_type="application/gzip", headers=NO_CACHE,
                                  background=BackgroundTask(close))
 
-    return [Route("/api/backup/manifest", manifest_route, methods=["GET"]),
+    def rebuild_status_route(request):
+        refusal = denied(request, credential)
+        if refusal is not None:
+            return refusal
+        path = data_root / "maintenance/notes-rebuild/task-047-cloud/status.json"
+        if not path.exists():
+            return JSONResponse({"status": "not_started"}, headers=NO_CACHE)
+        return JSONResponse(json.loads(path.read_text()), headers=NO_CACHE)
+
+    return [Route("/api/backup/rebuild-status", rebuild_status_route, methods=["GET"]),
+            Route("/api/backup/manifest", manifest_route, methods=["GET"]),
             Route("/api/backup/snapshot", snapshot_route, methods=["GET"])]

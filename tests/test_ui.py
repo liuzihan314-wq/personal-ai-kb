@@ -563,7 +563,7 @@ def test_ui_session_embedding_configuration_is_passed_to_search_and_qa(
     captured = {}
 
     class FakeRetrievalService:
-        def __init__(self, _index_path):
+        def __init__(self, _index_path, *, raw_dir=None):
             pass
 
         def search(self, _query, *, limit, embedding_client):
