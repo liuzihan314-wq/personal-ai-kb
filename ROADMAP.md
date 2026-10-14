@@ -8,6 +8,15 @@
 
 把 PRODUCT.md、ARCHITECTURE.md、TECH_STACK.md 转为可执行任务。
 
+### TASK-047｜真实笔记重建与原文问答修复
+
+Status：DONE。Owner：当前聊天；无额外 Worker。Branch：codex/task-047-real-notes；Worktree：.worktrees/task-047-real-notes；已集成 main。施工：[TASK-047](docs/tasks/TASK-047-real-notes-and-raw-evidence.md)。源码保存 eaf0531；文档另按 Git 记录追溯。
+
+- 2026-10-14 15:53：本地 26 篇、云端 27 篇笔记全部通过各自已配置真实 Provider 重建，Mock 标记 0；旧笔记／索引在各自活动根目录 data/derived-backups 保留，Raw 原件／PDF SHA-256 不变。保留资料 ID、导入时间、来源和个人备注；不合原文的模型引文剔除并计数。云端更新快照 data/cloud-backup/20261014-154952-d752b5 已下载校验。全局约束已按主人要求写入 /Users/mac/.codex/AGENTS.md。
+- 2026-10-14 15:53：正式 Note 默认真实 Provider、原文召回和问答上下文、空输入／失败清旧结果、脱敏错误与已知 Mock 主题证据排除均完成。真实云端第一次验收暴露原文片段截断，扩大为有界 6000 字符窗口并合并重叠后，最终网页“数字人口播有什么推荐方案？”返回 ANSWERED、knowledge+notes+raw，包含 InfiniteTalk、Wan-S2V、OmniHuman、HeyGem 与即梦／闪剪等产品及原文引用。截图 output/TASK-047-cloud-answer.png；没有声称实际 iPhone 操作验收或每一条 AI 事实已人工逐字核验。
+- 2026-10-14 15:53：270 项隔离回归通过，仅 5 条既有 SWIG 警告；锁校验、源码包／wheel、独立安装与导入通过，无新依赖、包内无私人资料。GitHub main 已同步 eaf0531，最终 Railway 部署 b49ddc90-5c2b-43b1-8430-ebd2824ab74b SUCCESS；一次性维护开关 disabled。本地启动器在此环境无法持久保留后台进程且系统 open 不可用，已在独立运行会话启动同一 main 源码、当前 PID 96352、127.0.0.1:8501、健康 ok；没有修改启动器实现。长期启动器持久性不属于本次完成声明。
+- 交付：output/TASK-047-real-notes.md、output/TASK-047-data-verification.json、output/TASK-047-local-answer.md。失败中间结果和恢复原件保留；不清理 .tmp/task-047-real-notes、开发 worktree、旧备份。云端新资料仍只备份到 Mac，不自动并入本地活动资料；模型连接长期稳定性不作保证。
+
 ### TASK-045｜Railway 免费试跑
 
 - 2026-10-13 14:34：向量响应中断有限重试修复已提交本地并同步 GitHub `main`（`031fe01`），Railway 固定源码切换至该提交，部署 `a4f8058e-e320-4c74-87b1-3363db0388da` SUCCESS，健康检查 `ok`，运行客户端源码指纹与本地一致。真实网页第一次“AI提示词”触发关键词回退并返回 3 条结果，第二次成功使用语义评分；展开 Prompt 候选显示 `semantic`、1024 维和相似度 0.6114，截图 `output/TASK-045-embedding-retry.png`。修复后的异常回退和语义成功路径通过；不能保证外部网络持续稳定。全量隔离配置测试 238 passed（5 条既有 SWIG 警告）；无新增依赖，未改变打包／安装方式及用户资料、密钥配置。本机测试误载配置导致认证字段进入失败输出，已告知主人撤销相应本机向量密钥，尚未确认撤销。临时诊断目录 `.tmp/railway-embedding/` 保留待确认清理；手机／Mac 新增互见闭环仍待真实输入验收。
@@ -29,6 +38,7 @@ Status：DONE。Owner：当前主线程；无额外 Worker。Thread：当前聊�
 - 2026-10-13 17:08：按主人最新要求改为每天 20:00，登录补检查，同日成功不重复连接。用户 LaunchAgent 已加载并实际运行，退出码 0；未来日历触发未跨日观察。真实 HTTPS 快照从 114 个文件追加到 117 个文件、38,649,473 字节，重复检查 unchanged；全部 SHA-256 校验通过。独立恢复演练重建 27 条 Note／Index，44 份原始文件含 15 份 PDF 哈希保持，两组关键词查询均返回 10 条候选，未改动原 Mac 活动资料。263 项测试通过，只有 5 条既有 SWIG 警告。
 - 2026-10-13 17:08：经主人确认，SSH/SFTP 网络阻塞后改用同域 HTTPS 专用只读接口与独立密钥；Streamlit 官方 st.App 服务部署成功（源码 bb6af45，部署 f99e046b-44d9-4d04-8d4e-f92874118440），健康 ok，无认证备份请求 401。原网页地址、业务资料和 AI 配置保留。开发分支 codex/cloud-backup，隔离目录 .worktrees/cloud-backup；本机快照、凭据、输出报告均排除 Git，代码及操作文档按本次授权同步。
 - 交付：`docs/cloud-backup.md`、`output/TASK-046-ai-coding-lessons.md`、`output/TASK-046-runtime-guide.md`、`output/TASK-046-directory-review.md`。正式整合原本机资料与清理临时文件不在本次执行范围；保留 .tmp/cloud-backup、开发 worktree 和全部快照。
+- 2026-10-13 18:26：按主人指出的覆盖不足，使用 memo-writing-style 将 `output/TASK-046-ai-coding-lessons.md` 扩为项目全过程复盘，覆盖 9 月 6 日至 10 月 13 日的五阶段、31 个主题；补齐工程基础、存储分层、输入／模型适配、去重、Mock、微信 POC、权限演变、来源预览、协作、打包交付和维护。依据设计、Git 历史和任务验收区分已实现、未验证与受阻事项；章节编号、8 个本地链接及备份事实核对通过。文件已保存，本地 Git 未提交，未同步 GitHub；本次前版保留于 `.tmp/retrospective-rewrite/`，未清理。
 
 ### 当前临时手机访问尝试
 
