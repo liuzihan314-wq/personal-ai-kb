@@ -21,11 +21,16 @@ def test_raw_detail_is_recalled_even_with_incomplete_note(tmp_path):
     hits=RetrievalService(index=idx,raw_dir=root/'raw').search('数字人有什么推荐办法？',embedding_client=None)
     assert hits.candidates[0].document_id==doc.id
     assert hits.candidates[0].evidence.raw
-    provider=MockAIProvider()
+    class CaptureProvider(MockAIProvider):
+        def answer_question(self,question,context=()):
+            self.context=context
+            return super().answer_question(question,context)
+    provider=CaptureProvider()
     result=QAService(index=idx,notes_dir=root/'notes',raw_dir=root/'raw',knowledge_dir=root/'knowledge',provider=provider).answer('数字人口播推荐方案')
     assert result.evidence_level=='notes+raw'
     assert any(s.kind=='raw' and s.citation_id for s in result.sources)
-    assert any(e.source_kind=='raw' and 'ExampleAvatar' in e.excerpt for e in result.evidence)
+    assert any('ExampleAvatar' in d.content for d in provider.context)
+    assert any(e.source_kind=='raw' for e in result.evidence)
     other=RetrievalService(index=idx,raw_dir=tmp_path/'bob/raw').search('数字人',embedding_client=None)
     assert not other.candidates
 
