@@ -5,7 +5,7 @@ import re
 from pkb.index.keywords import tokenize_text
 
 
-def source_passages(text: str, query: str, *, max_chars: int = 3000) -> tuple[str, list[str]]:
+def source_passages(text: str, query: str, *, max_chars: int = 6000) -> tuple[str, list[str]]:
     intent = query.casefold()
     for phrase in ('有什么', '有没有', '推荐', '方案', '办法', '怎么', '如何', '哪些', '什么', '帮我', '一下'):
         intent = intent.replace(phrase, ' ')
@@ -15,13 +15,21 @@ def source_passages(text: str, query: str, *, max_chars: int = 3000) -> tuple[st
     if not terms:
         return '', []
     ranked = []
-    for pos in range(0, len(text), 700):
-        chunk = text[pos:pos+1000]
+    for pos in range(0, len(text), 1400):
+        chunk = text[pos:pos+2800]
         matches = sorted(term for term in terms if term in chunk.casefold())
         if matches:
             ranked.append((sum(len(t)**2 for t in matches), pos, chunk, matches))
     chosen = sorted(sorted(ranked, key=lambda item: (-item[0], item[1]))[:3], key=lambda item: item[1])
-    result = '\n\n'.join(item[2] for item in chosen)[:max_chars]
+    parts = []
+    end = -1
+    for item in chosen:
+        start = max(item[1], end)
+        stop = item[1] + len(item[2])
+        if stop > start:
+            parts.append(text[start:stop])
+        end = max(end, stop)
+    result = '\n\n'.join(parts)[:max_chars]
     return result, sorted({term for item in chosen for term in item[3]})
 
 
