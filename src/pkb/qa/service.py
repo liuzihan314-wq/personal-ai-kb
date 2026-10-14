@@ -254,6 +254,8 @@ class QAService:
             except (FileNotFoundError, KnowledgeStorageError, KnowledgeFormatError) as exc:
                 raise QAStorageError(f"Invalid Knowledge file: {path}") from exc
             record = KnowledgeRecord(knowledge=knowledge, path=path, created=False)
+            if knowledge.synthesis.startswith("Mock compilation"):
+                continue
             key = _knowledge_key(knowledge.topic)
             existing = latest_by_topic.get(key)
             if existing is None or (
